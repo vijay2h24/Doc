@@ -1,0 +1,333 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Word Document Styling */
+.word-document-preview {
+  font-family: 'Times New Roman', Times, serif;
+  line-height: 1.6;
+  color: #000;
+  max-width: none;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.word-document-preview h1,
+.word-document-preview h2,
+.word-document-preview h3,
+.word-document-preview h4,
+.word-document-preview h5,
+.word-document-preview h6 {
+  font-weight: bold;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+  color: #000;
+}
+
+.word-document-preview h1 {
+  font-size: 2em;
+  border-bottom: 2px solid #000;
+  padding-bottom: 0.3em;
+}
+
+.word-document-preview h1.title {
+  font-size: 2.5em;
+  text-align: center;
+  border-bottom: none;
+  margin-bottom: 1em;
+}
+
+.word-document-preview h2 {
+  font-size: 1.5em;
+}
+
+.word-document-preview h2.subtitle {
+  font-size: 1.3em;
+  text-align: center;
+  font-style: italic;
+  color: #666;
+}
+
+.word-document-preview h3 {
+  font-size: 1.3em;
+}
+
+.word-document-preview h4 {
+  font-size: 1.1em;
+}
+
+.word-document-preview h5 {
+  font-size: 1em;
+  font-weight: bold;
+}
+
+.word-document-preview h6 {
+  font-size: 0.9em;
+  font-weight: bold;
+  color: #666;
+}
+
+.word-document-preview p {
+  margin-bottom: 1em;
+  text-align: left;
+  text-indent: 0;
+  white-space: pre-wrap;
+}
+
+/* Preserve original Word formatting */
+.word-document-preview * {
+  font-family: inherit;
+}
+
+.word-document-preview p:empty::before {
+  content: "\00a0";
+  display: inline-block;
+}
+
+.word-document-preview p.list-paragraph {
+  margin-left: 1.5em;
+  text-indent: -1.5em;
+}
+
+.word-document-preview blockquote {
+  margin: 1.5em 2em;
+  padding: 1em;
+  border-left: 4px solid #ccc;
+  background-color: #f9f9f9;
+  font-style: italic;
+}
+
+.word-document-preview blockquote.intense {
+  border-left-color: #333;
+  background-color: #f0f0f0;
+  font-weight: bold;
+}
+
+.word-document-preview strong,
+.word-document-preview b {
+  font-weight: bold;
+}
+
+.word-document-preview em,
+.word-document-preview i {
+  font-style: italic;
+}
+
+.word-document-preview em.subtle {
+  color: #666;
+}
+
+.word-document-preview strong.intense {
+  font-weight: 900;
+  color: #000;
+}
+
+.word-document-preview ul,
+.word-document-preview ol {
+  margin: 1em 0;
+  padding-left: 2em;
+}
+
+.word-document-preview li {
+  margin-bottom: 0.5em;
+}
+
+.word-document-preview table.word-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5em 0;
+  font-size: 0.9em;
+}
+
+.word-document-preview table.word-table th,
+.word-document-preview table.word-table td {
+  border: 1px solid #000;
+  padding: 0.5em;
+  text-align: left;
+  vertical-align: top;
+}
+
+.word-document-preview table.word-table th {
+  background-color: #f0f0f0;
+  font-weight: bold;
+}
+
+.word-document-preview img {
+  max-width: 100%;
+  height: auto;
+  margin: 1em 0;
+  display: block;
+}
+
+/* Preserve spacing and formatting */
+.word-document-preview br {
+  line-height: 1.6;
+}
+
+.word-document-preview pre {
+  font-family: 'Courier New', monospace;
+  background-color: #f5f5f5;
+  padding: 1em;
+  border: 1px solid #ddd;
+  overflow-x: auto;
+  margin: 1em 0;
+}
+
+.word-document-preview code {
+  font-family: 'Courier New', monospace;
+  background-color: #f5f5f5;
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+}
+
+/* Diff highlighting styles */
+.word-document-preview .diff-insert {
+  background-color: #d4edda;
+  color: #155724;
+  padding: 2px 4px;
+  border-radius: 3px;
+  text-decoration: none;
+  font-weight: normal;
+  font-family: inherit;
+}
+
+.word-document-preview .diff-delete {
+  background-color: #f8d7da;
+  color: #721c24;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-weight: normal;
+  font-family: inherit;
+}
+
+.word-document-preview .diff-change {
+  background-color: #ffeaa7;
+  color: #6c5ce7;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+/* Block-level diff highlighting */
+.word-document-preview .diff-insert-block {
+  background-color: #d4edda;
+  border-left: 4px solid #28a745;
+  padding: 8px;
+  margin: 4px 0;
+  border-radius: 4px;
+}
+
+.word-document-preview .diff-delete-block {
+  background-color: #f8d7da;
+  border-left: 4px solid #dc3545;
+  padding: 8px;
+  margin: 4px 0;
+  border-radius: 4px;
+  opacity: 0.8;
+}
+
+/* Modified block highlighting */
+.word-document-preview .diff-modify-block {
+  background-color: #fff3cd;
+  border-left: 4px solid #ffc107;
+  padding: 8px;
+  margin: 4px 0;
+  border-radius: 4px;
+}
+
+.word-document-preview .modified-element-label {
+  font-size: 0.75rem;
+  font-weight: bold;
+  color: #856404;
+  background-color: #ffe8a1;
+  padding: 2px 6px;
+  border-radius: 3px;
+  margin-bottom: 4px;
+  display: inline-block;
+}
+
+/* Labels for removed/added elements */
+.word-document-preview .removed-element-label {
+  font-size: 0.75rem;
+  font-weight: bold;
+  color: #721c24;
+  background-color: #f5c6cb;
+  padding: 2px 6px;
+  border-radius: 3px;
+  margin-bottom: 4px;
+  display: inline-block;
+}
+
+.word-document-preview .added-element-label {
+  font-size: 0.75rem;
+  font-weight: bold;
+  color: #155724;
+  background-color: #c3e6cb;
+  padding: 2px 6px;
+  border-radius: 3px;
+  margin-bottom: 4px;
+  display: inline-block;
+}
+
+/* Ensure images in diff blocks maintain their original styling */
+.word-document-preview .diff-insert-block img,
+.word-document-preview .diff-delete-block img,
+.word-document-preview .diff-modify-block img {
+  max-width: 100%;
+  height: auto;
+  margin: 8px 0;
+  display: block;
+}
+
+/* Ensure tables in diff blocks maintain their original styling */
+.word-document-preview .diff-insert-block table,
+.word-document-preview .diff-delete-block table,
+.word-document-preview .diff-modify-block table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+}
+
+/* Page-like appearance */
+.word-document-preview {
+  background: white;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  min-height: 11in;
+  padding: 1in;
+  margin: 0 auto;
+  position: relative;
+}
+
+/* Print-like margins and spacing */
+@media screen and (min-width: 768px) {
+  .word-document-preview {
+    width: 8.5in;
+    min-height: 11in;
+  }
+}
+
+/* Responsive adjustments */
+@media screen and (max-width: 767px) {
+  .word-document-preview {
+    padding: 1rem;
+    width: 100%;
+  }
+}
+
+/* Custom scrollbar for document preview */
+.word-document-preview::-webkit-scrollbar {
+  width: 8px;
+}
+
+.word-document-preview::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.word-document-preview::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+.word-document-preview::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
