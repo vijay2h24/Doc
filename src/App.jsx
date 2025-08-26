@@ -2,19 +2,19 @@ import React, { useState, useCallback } from "react";
 import Header from "./components/Header";
 import FileUpload from "./components/FileUpload";
 import DocumentPreview from "./components/DocumentPreview";
+import MiniMap from "./components/MiniMap";
 import ComparisonSummary from "./components/ComparisonSummary";
-import { DocumentData, ComparisonResult } from "./types";
 import { compareDocuments, compareHtmlDocuments } from "./utils/textComparison";
 import { exportComparisonResults } from "./utils/exportUtils";
 
 function App() {
-  const [leftDocument, setLeftDocument] = useState<DocumentData | null>(null);
-  const [rightDocument, setRightDocument] = useState<DocumentData | null>(null);
-  const [comparison, setComparison] = useState<ComparisonResult | null>(null);
-  const [viewMode, setViewMode] = useState<"preview" | "comparison">("preview");
+  const [leftDocument, setLeftDocument] = useState(null);
+  const [rightDocument, setRightDocument] = useState(null);
+  const [comparison, setComparison] = useState(null);
+  const [viewMode, setViewMode] = useState("preview");
 
   const handleDocumentUpload = useCallback(
-    (document: DocumentData, position: "left" | "right") => {
+    (document, position) => {
       if (position === "left") {
         setLeftDocument(document);
       } else {
@@ -28,14 +28,23 @@ function App() {
   );
 
   const handleCompareDocuments = useCallback(() => {
+    console.log("Compare button clicked!");
+    console.log("Left document:", leftDocument);
+    console.log("Right document:", rightDocument);
+    
     if (leftDocument && rightDocument) {
+      console.log("Both documents exist, starting comparison...");
       // Always use original, unmodified HTML content for comparison
       const result = compareHtmlDocuments(
         leftDocument.originalHtmlContent,
         rightDocument.originalHtmlContent
       );
+      console.log("Comparison result:", result);
       setComparison(result);
       setViewMode("comparison");
+      console.log("Comparison completed, view mode set to comparison");
+    } else {
+      console.log("Cannot compare - missing documents");
     }
   }, [leftDocument, rightDocument]);
 
@@ -125,16 +134,19 @@ function App() {
             />
 
             {/* Document Comparison View */}
-            <div className="grid lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-[1fr_50px_1fr] gap-6 items-stretch">
               <DocumentPreview
                 document={leftDocument}
                 diffs={comparison.leftDiffs}
                 title="Original Document"
+                containerId="left-preview-container"
               />
+              <MiniMap leftContainerId="left-preview-container" rightContainerId="right-preview-container" />
               <DocumentPreview
                 document={rightDocument}
                 diffs={comparison.rightDiffs}
                 title="Modified Document"
+                containerId="right-preview-container"
               />
             </div>
 
@@ -165,7 +177,7 @@ function App() {
           </div>
         )}
 
-        {/* Document Preview Mode */}
+        {/* Document Preview Mode - Always show original formatting */}
         {leftDocument && rightDocument && viewMode === "preview" && (
           <div className="space-y-6">
             <div className="text-center">
@@ -190,7 +202,7 @@ function App() {
           </div>
         )}
 
-        {/* Single Document Preview */}
+        {/* Single Document Preview - Always show original formatting */}
         {((leftDocument && !rightDocument) ||
           (!leftDocument && rightDocument)) && (
           <div className="space-y-6">
@@ -205,7 +217,7 @@ function App() {
 
             <div className="max-w-4xl mx-auto">
               <DocumentPreview
-                document={leftDocument || rightDocument!}
+                document={leftDocument || rightDocument}
                 title={leftDocument ? "Original Document" : "Modified Document"}
               />
             </div>
@@ -266,4 +278,4 @@ function App() {
   );
 }
 
-export default App;
+export default App; 

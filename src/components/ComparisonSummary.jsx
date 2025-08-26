@@ -1,13 +1,7 @@
 import React from 'react';
 import { Plus, Minus, BarChart3, Download, Image, Table } from 'lucide-react';
-import { ComparisonResult } from '../types';
 
-interface ComparisonSummaryProps {
-  comparison: ComparisonResult;
-  onExport: () => void;
-}
-
-const ComparisonSummary: React.FC<ComparisonSummaryProps> = ({ comparison, onExport }) => {
+const ComparisonSummary = ({ comparison, onExport }) => {
   const { summary } = comparison;
 
   return (
@@ -75,4 +69,4 @@ const ComparisonSummary: React.FC<ComparisonSummaryProps> = ({ comparison, onExp
   );
 };
 
-export default ComparisonSummary;
+export default ComparisonSummary; 
