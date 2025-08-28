@@ -58,9 +58,21 @@
 /* Git-like diff highlighting - green for additions, red for deletions only */
 .word-document-preview .git-line-added { background-color: #d4edda; border-left: 4px solid #28a745; padding: 8px 12px; margin: 4px 0; border-radius: 4px; }
 .word-document-preview .git-line-removed { background-color: #f8d7da; border-left: 4px solid #dc3545; padding: 8px 12px; margin: 4px 0; border-radius: 4px; }
-/* Suppress modified-line background; only show red/green adds/deletes */
 .word-document-preview .git-line-modified { background-color: #fff7e0; border-left: 4px solid #ffc107; padding: 8px 12px; margin: 4px 0; border-radius: 4px; }
-.word-document-preview .git-line-placeholder { background: repeating-linear-gradient(45deg, #f3f4f6, #f3f4f6 6px, #eef2f7 6px, #eef2f7 12px); border-left: 4px solid #9ca3af; margin: 4px 0; border-radius: 4px; }
+.word-document-preview .git-line-placeholder { 
+  background: transparent; 
+  border-left: 4px solid transparent; 
+  margin: 4px 0; 
+  border-radius: 4px; 
+  min-height: 20px;
+  display: block;
+  /* Maintain original document formatting while showing as empty space */
+  color: transparent;
+  /* Preserve line height and spacing */
+  line-height: inherit;
+  font-size: inherit;
+  font-family: inherit;
+}
 
 /* Inline highlighting for changes within lines - green and red only */
 .word-document-preview .git-inline-added { background-color: #d4edda; color: #155724; padding: 2px 4px; border-radius: 3px; font-weight: 500; white-space: pre-wrap; }

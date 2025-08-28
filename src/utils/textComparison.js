@@ -41,8 +41,8 @@ export const compareHtmlDocuments = (leftHtml, rightHtml) => {
   summary.deletions += structSummary.deletions;
   summary.changes = summary.additions + summary.deletions;
 
-  const leftFinal = applyGitLikeLineComparison(leftWithTable, rightWithTable, "left");
-  const rightFinal = applyGitLikeLineComparison(rightWithTable, leftWithTable, "right");
+  const leftFinal = applyTrueLineByLineComparison(leftWithTable, rightWithTable, "left");
+  const rightFinal = applyTrueLineByLineComparison(rightWithTable, leftWithTable, "right");
 
   const detailed = generateDetailedReport(leftHtml, rightHtml);
 
@@ -54,7 +54,7 @@ export const compareHtmlDocuments = (leftHtml, rightHtml) => {
 
 const BLOCK_TAGS = new Set(["p","h1","h2","h3","h4","h5","h6","li","pre","div"]);
 
-const collectLines = (root) => {
+const collectLinesWithStructure = (root) => {
   const lines = [];
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, null);
   let node;
@@ -62,27 +62,47 @@ const collectLines = (root) => {
     const tag = node.tagName ? node.tagName.toLowerCase() : "";
     if (BLOCK_TAGS.has(tag) && !isInsideTable(node) && !isInsideTable(node.parentNode)) {
       const text = node.textContent || "";
-      lines.push({ element: node, text, originalText: text, isEmpty: text.trim().length === 0, tagName: tag });
+      const computedStyle = window.getComputedStyle ? window.getComputedStyle(node) : {};
+      const height = node.offsetHeight || parseInt(computedStyle.lineHeight) || 20;
+      
+      lines.push({ 
+        element: node, 
+        text, 
+        originalText: text, 
+        isEmpty: text.trim().length === 0, 
+        tagName: tag,
+        height: height,
+        styles: {
+          fontSize: node.style.fontSize || computedStyle.fontSize || '',
+          fontFamily: node.style.fontFamily || computedStyle.fontFamily || '',
+          fontWeight: node.style.fontWeight || computedStyle.fontWeight || '',
+          color: node.style.color || computedStyle.color || '',
+          textAlign: node.style.textAlign || computedStyle.textAlign || '',
+          lineHeight: node.style.lineHeight || computedStyle.lineHeight || '',
+          margin: node.style.margin || '',
+          padding: node.style.padding || '',
+          backgroundColor: node.style.backgroundColor || computedStyle.backgroundColor || ''
+        }
+      });
     }
   }
   return lines;
 };
 
-const applyGitLikeLineComparison = (ownHtml, otherHtml, side) => {
+const applyTrueLineByLineComparison = (ownHtml, otherHtml, side) => {
   const ownDiv = htmlToDiv(ownHtml);
   const otherDiv = htmlToDiv(otherHtml);
 
-  const ownLines = collectLines(ownDiv);
-  const otherLines = collectLines(otherDiv);
+  const ownLines = collectLinesWithStructure(ownDiv);
+  const otherLines = collectLinesWithStructure(otherDiv);
 
-  const diffResult = createIndexAlignedDiff(ownLines, otherLines);
-
-  applyGitLikeDiffToDOM(ownDiv, diffResult, side);
+  const alignedDiff = createTrueLineAlignment(ownLines, otherLines);
+  applyLineByLineDiffToDOM(ownDiv, alignedDiff, side);
+  
   return ownDiv.innerHTML;
 };
 
-// Build a robust line mapping using LCS via diffArrays so insertions/deletions align properly
-const createIndexAlignedDiff = (ownLines, otherLines) => {
+const createTrueLineAlignment = (ownLines, otherLines) => {
   const ownTexts = ownLines.map(l => l.text || "");
   const otherTexts = otherLines.map(l => l.text || "");
   const parts = diffArrays(ownTexts, otherTexts, { comparator: (a, b) => a === b });
@@ -93,56 +113,107 @@ const createIndexAlignedDiff = (ownLines, otherLines) => {
 
   for (let p = 0; p < parts.length; p++) {
     const part = parts[p];
+    
     if (part.added) {
-      // Lines present only in other
+      // Lines present only in other document - create placeholders in own document
       for (let k = 0; k < part.value.length; k++) {
         const otherLine = otherLines[iOther + k] || null;
-        result.push({ type: 'onlyOther', lineNumber: iOwn + k, content: otherLine ? (otherLine.text || '') : '', element: null, isEmpty: otherLine ? otherLine.isEmpty : true, otherContent: otherLine ? (otherLine.text || '') : '', otherElement: otherLine ? otherLine.element : null });
+        result.push({ 
+          type: 'placeholder', 
+          lineNumber: result.length, 
+          content: '', 
+          element: null, 
+          otherLine: otherLine,
+          height: otherLine ? otherLine.height : 20
+        });
       }
       iOther += part.count || part.value.length;
       continue;
     }
+    
     if (part.removed) {
-      // Look-ahead: if the next part is an added block of similar size, treat as modified pairs
+      // Look ahead to see if next part is added (modification case)
       const next = parts[p + 1];
       if (next && next.added) {
         const removedCount = part.count || part.value.length;
         const addedCount = next.count || next.value.length;
         const pairCount = Math.min(removedCount, addedCount);
+        
+        // Handle paired modifications
         for (let k = 0; k < pairCount; k++) {
           const ownLine = ownLines[iOwn + k] || null;
           const otherLine = otherLines[iOther + k] || null;
           if (ownLine && otherLine) {
-            result.push({ type: 'modified', lineNumber: iOwn + k, content: ownLine.text || '', otherContent: otherLine.text || '', element: ownLine.element, isEmpty: ownLine.isEmpty, otherElement: otherLine.element });
+            result.push({ 
+              type: 'modified', 
+              lineNumber: result.length, 
+              content: ownLine.text || '', 
+              otherContent: otherLine.text || '', 
+              element: ownLine.element, 
+              otherLine: otherLine
+            });
           }
         }
-        // Remaining removed-only
+        
+        // Handle remaining removed lines
         for (let k = pairCount; k < removedCount; k++) {
           const ownLine = ownLines[iOwn + k] || null;
           if (ownLine) {
-            result.push({ type: 'onlyOwn', lineNumber: iOwn + k, content: ownLine.text || '', element: ownLine.element, isEmpty: ownLine.isEmpty, otherElement: null });
+            result.push({ 
+              type: 'removed', 
+              lineNumber: result.length, 
+              content: ownLine.text || '', 
+              element: ownLine.element
+            });
           }
         }
-        // Remaining added-only will be handled when we advance to the next loop iteration for the added part
+        
+        // Handle remaining added lines as placeholders
+        for (let k = pairCount; k < addedCount; k++) {
+          const otherLine = otherLines[iOther + k] || null;
+          result.push({ 
+            type: 'placeholder', 
+            lineNumber: result.length, 
+            content: '', 
+            element: null, 
+            otherLine: otherLine,
+            height: otherLine ? otherLine.height : 20
+          });
+        }
+        
         iOwn += removedCount;
-        // Do not consume iOther yet; it will be advanced by the added branch above when loop continues to next part
-        // Skip processing of the next added part here; it will be processed normally
+        iOther += addedCount;
+        p++; // Skip the next added part as we've processed it
         continue;
       }
+      
       // Pure removals
       for (let k = 0; k < (part.count || part.value.length); k++) {
         const ownLine = ownLines[iOwn + k] || null;
         if (ownLine) {
-          result.push({ type: 'onlyOwn', lineNumber: iOwn + k, content: ownLine.text || '', element: ownLine.element, isEmpty: ownLine.isEmpty, otherElement: null });
+          result.push({ 
+            type: 'removed', 
+            lineNumber: result.length, 
+            content: ownLine.text || '', 
+            element: ownLine.element
+          });
         }
       }
       iOwn += part.count || part.value.length;
       continue;
     }
-    // Equal block
+    
+    // Equal block - unchanged lines
     for (let k = 0; k < (part.count || part.value.length); k++) {
       const ownLine = ownLines[iOwn + k];
-      result.push({ type: 'unchanged', lineNumber: iOwn + k, content: ownLine.text || '', element: ownLine.element, isEmpty: ownLine.isEmpty });
+      const otherLine = otherLines[iOther + k];
+      result.push({ 
+        type: 'unchanged', 
+        lineNumber: result.length, 
+        content: ownLine.text || '', 
+        element: ownLine.element,
+        otherLine: otherLine
+      });
     }
     iOwn += part.count || part.value.length;
     iOther += part.count || part.value.length;
@@ -151,71 +222,63 @@ const createIndexAlignedDiff = (ownLines, otherLines) => {
   return result;
 };
 
-const applyGitLikeDiffToDOM = (container, diffResult, side) => {
-  const getBlocks = () => Array.from(container.querySelectorAll(Array.from(BLOCK_TAGS).join(',')));
-  const addGutter = (el, marker, lineNumber) => {
-    if (!el || el.classList.contains('with-gutter')) return;
-    el.classList.add('with-gutter');
-    const gutter = document.createElement('span');
-    gutter.className = 'git-gutter';
-    gutter.setAttribute('data-marker', marker || ' ');
-    if (typeof lineNumber === 'number') gutter.setAttribute('data-line', String(lineNumber + 1));
-    el.insertBefore(gutter, el.firstChild);
-  };
-
-  diffResult.forEach((diffLine) => {
+const applyLineByLineDiffToDOM = (container, diffResult, side) => {
+  const processedElements = new Set();
+  
+  diffResult.forEach((diffLine, index) => {
     const type = diffLine.type;
 
-    if (type === 'onlyOwn') {
+    if (type === 'removed') {
       const element = diffLine.element;
-      if (!element) return;
-      if (side === 'left') {
-        element.classList.add('git-line-removed');
-        addGutter(element, '-', diffLine.lineNumber);
-        applyInlineWordDiff(element, element.textContent || '', '', 'left');
-      } else if (side === 'right') {
-        element.classList.add('git-line-added');
-        addGutter(element, '+', diffLine.lineNumber);
-        applyInlineWordDiff(element, '', element.textContent || '', 'right');
-      }
+      if (!element || processedElements.has(element)) return;
+      processedElements.add(element);
+      
+      element.classList.add('git-line-removed');
+      applyInlineWordDiff(element, element.textContent || '', '', side);
       return;
     }
 
     if (type === 'modified') {
       const element = diffLine.element;
-      if (!element) return;
+      if (!element || processedElements.has(element)) return;
+      processedElements.add(element);
+      
       const ownText = element.textContent || '';
       const otherText = diffLine.otherContent || '';
-      // Mark the whole line as modified to mimic Git-style diffs
       element.classList.add('git-line-modified');
-      addGutter(element, ' ', diffLine.lineNumber);
       applyInlineWordDiff(element, ownText, otherText, side);
       return;
     }
 
-    if (type === 'onlyOther') {
-      // Insert a height-matched placeholder at this index to preserve vertical alignment
-      const blocks = getBlocks();
-      const anchor = blocks[diffLine.lineNumber] || null;
-      const placeholder = document.createElement(diffLine.otherElement ? diffLine.otherElement.tagName.toLowerCase() : 'div');
-      placeholder.className = 'git-line-placeholder';
-      // Add gutter showing +/- depending on which side lacks the line
-      const marker = side === 'left' ? '+' : '-';
-      const gutter = document.createElement('span');
-      gutter.className = 'git-gutter';
-      gutter.setAttribute('data-marker', marker);
-      gutter.setAttribute('data-line', String((diffLine.lineNumber || 0) + 1));
-      placeholder.classList.add('with-gutter');
-      placeholder.appendChild(gutter);
-      // Measure other element height
-      let heightPx = 0;
-      if (diffLine.otherElement) {
-        heightPx = diffLine.otherElement.offsetHeight || diffLine.otherElement.getBoundingClientRect().height || 0;
+    if (type === 'placeholder') {
+      // Create a placeholder element that matches the height and style of the corresponding line
+      const otherLine = diffLine.otherLine;
+      const placeholder = document.createElement(otherLine ? otherLine.tagName : 'div');
+      
+      // Apply similar styling to maintain document structure
+      if (otherLine && otherLine.styles) {
+        Object.entries(otherLine.styles).forEach(([prop, value]) => {
+          if (value) {
+            placeholder.style[prop] = value;
+          }
+        });
       }
-      if (heightPx > 0) placeholder.style.height = `${Math.ceil(heightPx)}px`;
-      placeholder.setAttribute('data-line', String(diffLine.lineNumber));
-      if (anchor && anchor.parentNode) {
-        anchor.parentNode.insertBefore(placeholder, anchor);
+      
+      // Set minimum height to match the other document's line
+      const height = diffLine.height || 20;
+      placeholder.style.minHeight = `${height}px`;
+      placeholder.style.height = `${height}px`;
+      
+      // Add placeholder styling
+      placeholder.classList.add('git-line-placeholder');
+      placeholder.innerHTML = '&nbsp;'; // Non-breaking space to maintain line height
+      
+      // Insert placeholder at the correct position
+      const existingElements = Array.from(container.querySelectorAll(Array.from(BLOCK_TAGS).join(',')))
+        .filter(el => !isInsideTable(el));
+      
+      if (index < existingElements.length) {
+        existingElements[index].parentNode.insertBefore(placeholder, existingElements[index]);
       } else {
         container.appendChild(placeholder);
       }
@@ -223,6 +286,7 @@ const applyGitLikeDiffToDOM = (container, diffResult, side) => {
     }
 
     if (type === 'unchanged') {
+      // Leave unchanged lines as they are
       return;
     }
   });
@@ -231,82 +295,33 @@ const applyGitLikeDiffToDOM = (container, diffResult, side) => {
 const applyInlineWordDiff = (element, ownText, otherText, side) => {
   const diffs = diffWordsWithSpace(ownText || '', otherText || '');
 
-  // Traverse text nodes and replace text segments with highlighted spans respecting diffs
-  const textNodes = [];
-  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, null);
-  let tn;
-  while ((tn = walker.nextNode())) {
-    textNodes.push(tn);
-  }
+  // Clear existing content and rebuild with diff highlighting
+  const originalHTML = element.innerHTML;
+  element.innerHTML = '';
 
-  let diffIdx = 0;
-  let diffOffset = 0;
-
-  const getNextSegment = (needLen) => {
-    if (diffIdx >= diffs.length || needLen <= 0) return null;
-    const d = diffs[diffIdx];
-    const remaining = (d.value || '').length - diffOffset;
-    const take = Math.min(needLen, remaining);
-    const segment = { added: !!d.added, removed: !!d.removed, value: (d.value || '').slice(diffOffset, diffOffset + take) };
-    diffOffset += take;
-    if (diffOffset >= (d.value || '').length) { diffIdx++; diffOffset = 0; }
-    return segment;
-  };
-
-  const toVisible = (s) => (s || '').replace(/ /g, '\u00B7').replace(/\t/g, '\u2192');
-
-  textNodes.forEach((node) => {
-    const text = node.nodeValue || '';
-    if (!text.length) return;
-
-    const frag = document.createDocumentFragment();
-    let consumed = 0;
-    while (consumed < text.length) {
-      let seg = getNextSegment(text.length - consumed);
-      if (!seg) {
-        frag.appendChild(document.createTextNode(text.slice(consumed)));
-        consumed = text.length;
-        break;
-      }
-      const segText = text.substr(consumed, seg.value.length);
-      const shouldAdd = seg.added && side === 'right';
-      const shouldRemove = seg.removed && side === 'left';
-      if (shouldAdd) {
-        const span = document.createElement('span');
-        span.className = 'git-inline-added';
-        span.textContent = toVisible(segText);
-        frag.appendChild(span);
-      } else if (shouldRemove) {
-        const span = document.createElement('span');
-        span.className = 'git-inline-removed';
-        span.textContent = toVisible(segText);
-        frag.appendChild(span);
-      } else {
-        frag.appendChild(document.createTextNode(toVisible(segText)));
-      }
-      consumed += seg.value.length;
+  diffs.forEach((diff) => {
+    const span = document.createElement('span');
+    
+    if (diff.added && side === 'right') {
+      span.className = 'git-inline-added';
+      span.textContent = diff.value;
+    } else if (diff.removed && side === 'left') {
+      span.className = 'git-inline-removed';
+      span.textContent = diff.value;
+    } else if (!diff.added && !diff.removed) {
+      span.textContent = diff.value;
+    } else {
+      // Don't show additions on left side or removals on right side
+      return;
     }
-    node.parentNode.replaceChild(frag, node);
+    
+    element.appendChild(span);
   });
-};
 
-const applyInlineDiffHighlighting = (element, ownText, otherText, side) => {
-  // Deprecated; use applyInlineWordDiff
-  return;
-};
-
-const isInsideTable = (node) => {
-  let p = node.parentNode;
-  while (p) {
-    if (p.nodeType === 1) {
-      const tag = p.tagName && p.tagName.toLowerCase();
-      if (tag === 'table' || tag === 'thead' || tag === 'tbody' || tag === 'tr' || tag === 'td' || tag === 'th') {
-        return true;
-      }
-    }
-    p = p.parentNode;
+  // If element is empty after processing, add a non-breaking space to maintain height
+  if (!element.textContent.trim()) {
+    element.innerHTML = '&nbsp;';
   }
-  return false;
 };
 
 const applyImageDiffOutlines = (leftHtml, rightHtml) => {
@@ -399,6 +414,20 @@ const applyTableCellDiffs = (ownHtml, otherHtml, side) => {
   }
 
   return ownDiv.innerHTML;
+};
+
+const isInsideTable = (node) => {
+  let p = node.parentNode;
+  while (p) {
+    if (p.nodeType === 1) {
+      const tag = p.tagName && p.tagName.toLowerCase();
+      if (tag === 'table' || tag === 'thead' || tag === 'tbody' || tag === 'tr' || tag === 'td' || tag === 'th') {
+        return true;
+      }
+    }
+    p = p.parentNode;
+  }
+  return false;
 };
 
 const htmlToDiv = (html) => {
