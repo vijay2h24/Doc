@@ -1,4 +1,5 @@
 import { renderHtmlDifferences } from './textComparison';
+import html2pdf from 'html2pdf.js/dist/html2pdf.bundle.min.js';
 
 export const exportComparisonResults = (
   comparison,
@@ -105,3 +106,42 @@ export const exportAsHtml = (
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }; 
+
+export const exportAsPdf = (
+  comparison,
+  leftDocument,
+  rightDocument
+) => {
+  const leftHtml = renderHtmlDifferences(comparison.leftDiffs);
+  const rightHtml = renderHtmlDifferences(comparison.rightDiffs);
+
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = `
+    <div style="font-family: Arial, sans-serif;">
+      <div style="text-align:center;margin-bottom:16px;">
+        <h2 style="margin:0;">Document Comparison Report</h2>
+        <div style="color:#666;font-size:12px;">${new Date().toLocaleString()}</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div style="border:1px solid #ddd;border-radius:8px;overflow:hidden;">
+          <div style="background:#f8f9fa;padding:8px 12px;font-weight:bold;">Original: ${leftDocument.name}</div>
+          <div style="padding:12px;">${leftHtml}</div>
+        </div>
+        <div style="border:1px solid #ddd;border-radius:8px;overflow:hidden;">
+          <div style="background:#f8f9fa;padding:8px 12px;font-weight:bold;">Modified: ${rightDocument.name}</div>
+          <div style="padding:12px;">${rightHtml}</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const opt = {
+    margin:       10,
+    filename:     `document-comparison-${Date.now()}.pdf`,
+    image:        { type: 'jpeg', quality: 0.95 },
+    html2canvas:  { scale: 2, useCORS: true, logging: false },
+    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+  };
+
+  return html2pdf().from(wrapper).set(opt).save();
+};

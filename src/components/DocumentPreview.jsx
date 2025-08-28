@@ -3,9 +3,28 @@ import { renderHtmlDifferences } from '../utils/textComparison';
 
 const DocumentPreview = ({ document, diffs, title, containerId }) => {
   const contentRef = useRef(null);
-  // In preview mode, always use original HTML content to preserve formatting
-  // In comparison mode, apply diff highlighting while preserving structure
+  const containerRef = useRef(null);
+
   const content = diffs ? renderHtmlDifferences(diffs) : document.originalHtmlContent;
+
+  // Calculate and apply scale to fit content within preview width while preserving 100% proportions
+  useEffect(() => {
+    if (contentRef.current && containerRef.current) {
+      const calculateScale = () => {
+        const contentWidth = contentRef.current.scrollWidth;
+        const containerWidth = containerRef.current.clientWidth - 16; // Account for padding
+        const scale = Math.min(1, containerWidth / contentWidth);
+        
+        contentRef.current.style.transform = `scale(${scale})`;
+        contentRef.current.style.transformOrigin = 'top left';
+        contentRef.current.style.width = `${100 / scale}%`;
+      };
+
+      // Calculate scale after content loads
+      const timer = setTimeout(calculateScale, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [content]);
 
 	return (
 		<div className="min-w-0 h-full flex flex-col bg-white rounded-lg shadow-lg border border-gray-200">
@@ -19,9 +38,10 @@ const DocumentPreview = ({ document, diffs, title, containerId }) => {
 				</p>
 			</div>
 			
-			<div className="flex-1 overflow-auto" id={containerId} onClick={() => jumpToNextChange(containerId)}>
-				<div className="p-8 bg-white min-h-full">
+			<div className="flex-1 overflow-auto" id={containerId} onClick={() => jumpToNextChange(containerId)} ref={containerRef}>
+				<div className="p-2 bg-white min-h-full">
 					<div 
+						ref={contentRef}
 						className="word-document-preview"
 						dangerouslySetInnerHTML={{ __html: content }}
 					/>

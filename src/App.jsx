@@ -4,14 +4,16 @@ import FileUpload from "./components/FileUpload";
 import DocumentPreview from "./components/DocumentPreview";
 import MiniMap from "./components/MiniMap";
 import ComparisonSummary from "./components/ComparisonSummary";
+import DetailedReport from "./components/DetailedReport";
 import { compareDocuments, compareHtmlDocuments } from "./utils/textComparison";
-import { exportComparisonResults } from "./utils/exportUtils";
+import { exportComparisonResults, exportAsHtml, exportAsPdf } from "./utils/exportUtils";
 
 function App() {
   const [leftDocument, setLeftDocument] = useState(null);
   const [rightDocument, setRightDocument] = useState(null);
   const [comparison, setComparison] = useState(null);
   const [viewMode, setViewMode] = useState("preview");
+  const [showDetailed, setShowDetailed] = useState(false);
 
   const handleDocumentUpload = useCallback(
     (document, position) => {
@@ -51,6 +53,16 @@ function App() {
   const handleExportResults = useCallback(() => {
     if (!comparison || !leftDocument || !rightDocument) return;
     exportComparisonResults(comparison, leftDocument, rightDocument);
+  }, [comparison, leftDocument, rightDocument]);
+
+  const handleExportHtml = useCallback(() => {
+    if (!comparison || !leftDocument || !rightDocument) return;
+    exportAsHtml(comparison, leftDocument, rightDocument);
+  }, [comparison, leftDocument, rightDocument]);
+
+  const handleExportPdf = useCallback(() => {
+    if (!comparison || !leftDocument || !rightDocument) return;
+    exportAsPdf(comparison, leftDocument, rightDocument);
   }, [comparison, leftDocument, rightDocument]);
 
   const clearDocuments = useCallback(() => {
@@ -107,6 +119,16 @@ function App() {
                 >
                   Comparison
                 </button>
+                {comparison && (
+                  <button
+                    onClick={() => setShowDetailed((v) => !v)}
+                    className={`px-4 py-2 rounded-md font-medium transition-all duration-200 ${
+                      showDetailed ? "bg-white text-blue-600 shadow-sm" : "text-gray-600 hover:text-gray-800"
+                    }`}
+                  >
+                    {showDetailed ? 'Hide details' : 'Show details'}
+                  </button>
+                )}
               </div>
             )}
             <button
@@ -130,11 +152,13 @@ function App() {
           <div className="space-y-6">
             <ComparisonSummary
               comparison={comparison}
-              onExport={handleExportResults}
+              onExportJson={handleExportResults}
+              onExportHtml={handleExportHtml}
+              onExportPdf={handleExportPdf}
             />
 
             {/* Document Comparison View */}
-            <div className="grid grid-cols-[1fr_50px_1fr] gap-6 items-stretch">
+            <div className="grid grid-cols-[1fr_60px_1fr] gap-4 items-stretch">
               <DocumentPreview
                 document={leftDocument}
                 diffs={comparison.leftDiffs}
@@ -149,6 +173,10 @@ function App() {
                 containerId="right-preview-container"
               />
             </div>
+
+            {showDetailed && (
+              <DetailedReport report={comparison.detailed} />
+            )}
 
             {/* Legend */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
@@ -189,7 +217,7 @@ function App() {
               </p>
             </div>
 
-            <div className="grid lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-2 gap-6">
               <DocumentPreview
                 document={leftDocument}
                 title="Original Document"

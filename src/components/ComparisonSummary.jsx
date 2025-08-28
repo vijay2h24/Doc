@@ -1,7 +1,7 @@
-import React from 'react';
-import { Plus, Minus, BarChart3, Download, Image, Table } from 'lucide-react';
 
-const ComparisonSummary = ({ comparison, onExport }) => {
+import { Plus, Minus, BarChart3, Download, Image, Table, FileText as FileIcon, FileDown } from 'lucide-react';
+
+const ComparisonSummary = ({ comparison, onExportJson, onExportHtml, onExportPdf }) => {
   const { summary } = comparison;
 
   return (
@@ -11,13 +11,32 @@ const ComparisonSummary = ({ comparison, onExport }) => {
           <BarChart3 className="h-5 w-5" />
           Comparison Summary
         </h3>
-        <button
-          onClick={onExport}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <Download className="h-4 w-4" />
-          Export Results
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onExportJson}
+            className="flex items-center gap-2 px-3 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors"
+            title="Export JSON"
+          >
+            <Download className="h-4 w-4" />
+            JSON
+          </button>
+          <button
+            onClick={onExportHtml}
+            className="flex items-center gap-2 px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+            title="Export HTML"
+          >
+            <FileIcon className="h-4 w-4" />
+            HTML
+          </button>
+          <button
+            onClick={onExportPdf}
+            className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            title="Export PDF"
+          >
+            <FileDown className="h-4 w-4" />
+            PDF
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-4">

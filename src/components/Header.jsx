@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { GitCompare } from 'lucide-react';
 
 const Header = () => {

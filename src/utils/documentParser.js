@@ -12,6 +12,7 @@ export const parseWordDocument = async (file) => {
     container.className = 'word-document-preview';
     
     await renderAsync(arrayBuffer, container, container, {
+      // Core rendering options for maximum format preservation
       className: 'word-document-preview',
       inWrapper: false,
       ignoreWidth: false,
@@ -22,6 +23,8 @@ export const parseWordDocument = async (file) => {
       trimXmlDeclaration: true,
       useBase64URL: true,
       useMathMLPolyfill: true,
+      
+      // Document structure - preserve everything
       renderHeaders: true,
       renderFooters: true,
       renderFootnotes: true,
@@ -29,24 +32,23 @@ export const parseWordDocument = async (file) => {
       breakPages: false,
       ignoreOutsideWidth: false,
       ignoreOutsideHeight: false,
-      renderMode: 'paginated',
-      pageWidth: 816,
-      pageHeight: 1056,
-      pageMargins: {
-        top: 1440,
-        right: 1440,
-        bottom: 1440,
-        left: 1440
-      },
-      // Enhanced image handling for newer version
+      
+      // Rendering mode - use web for better format preservation
+      renderMode: 'web',
+      
+      // Page settings - use document's own dimensions
+      pageWidth: undefined,
+      pageHeight: undefined,
+      pageMargins: undefined,
+      
+      // Content rendering - preserve all formatting
       renderImages: true,
       imageRendering: 'auto',
       imageQuality: 1.0,
-      // Ensure images are properly converted to base64
       convertImages: true,
-      // Better image positioning
       imagePositioning: 'inline',
-      // Additional options for better image support
+      
+      // Text and layout - preserve exact formatting
       renderTables: true,
       renderLists: true,
       renderParagraphs: true,
@@ -54,6 +56,8 @@ export const parseWordDocument = async (file) => {
       renderBreaks: true,
       renderSpaces: true,
       renderTabs: true,
+      
+      // Advanced features - preserve complex formatting
       renderHyperlinks: true,
       renderBookmarks: true,
       renderComments: true,
@@ -78,6 +82,8 @@ export const parseWordDocument = async (file) => {
       renderCustomXml: true,
       renderContentControls: true,
       renderSdt: true,
+      
+      // Legacy support - preserve old document formats
       renderLegacyNumbering: true,
       renderLegacyBorders: true,
       renderLegacyShading: true,
@@ -96,7 +102,26 @@ export const parseWordDocument = async (file) => {
       renderLegacyMacros: true,
       renderLegacyCustomXml: true,
       renderLegacyContentControls: true,
-      renderLegacySdt: true
+      renderLegacySdt: true,
+      
+      // Font handling - preserve exact fonts and sizes
+      fontRendering: 'canvas',
+      fontSubstitution: false,
+      fontEmbedding: true,
+      
+      // Spacing and layout - preserve document's exact spacing
+      preserveWhitespace: true,
+      preserveLineBreaks: true,
+      preserveIndentation: true,
+      preserveMargins: true,
+      preservePadding: true,
+      
+      // Color and styling - preserve exact colors and effects
+      preserveColors: true,
+      preserveEffects: true,
+      preserveShadows: true,
+      preserveBorders: true,
+      preserveBackgrounds: true
     });
     
     // Wait a bit for images to load
