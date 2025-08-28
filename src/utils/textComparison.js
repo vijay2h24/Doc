@@ -24,25 +24,32 @@ export const compareDocuments = (leftText, rightText) => {
 };
 
 export const compareHtmlDocuments = (leftHtml, rightHtml) => {
+  // First, check if documents are identical
   const leftText = extractPlainText(leftHtml);
   const rightText = extractPlainText(rightHtml);
-  const textDiffs = diffChars(leftText, rightText);
+  
+  if (leftText.trim() === rightText.trim()) {
+    // Documents are identical, return original content without any highlighting
+    const leftDiffs = [{ type: "equal", content: leftHtml }];
+    const rightDiffs = [{ type: "equal", content: rightHtml }];
+    const summary = { additions: 0, deletions: 0, changes: 0 };
+    const detailed = { lines: [], tables: [], images: [] };
+    return { leftDiffs, rightDiffs, summary, detailed };
+  }
 
   const { leftDomWithImages, rightDomWithImages, structSummary } = applyImageDiffOutlines(leftHtml, rightHtml);
   const leftWithTable = applyTableCellDiffs(leftDomWithImages, rightDomWithImages, "left");
   const rightWithTable = applyTableCellDiffs(rightDomWithImages, leftDomWithImages, "right");
 
   let summary = { additions: 0, deletions: 0, changes: 0 };
-  textDiffs.forEach((d) => {
-    if (d.added) summary.additions++;
-    if (d.removed) summary.deletions++;
-  });
   summary.additions += structSummary.additions;
   summary.deletions += structSummary.deletions;
-  summary.changes = summary.additions + summary.deletions;
 
-  const leftFinal = applyTrueLineByLineComparison(leftWithTable, rightWithTable, "left");
-  const rightFinal = applyTrueLineByLineComparison(rightWithTable, leftWithTable, "right");
+  const { leftFinal, rightFinal, textSummary } = applyTrueLineByLineComparison(leftWithTable, rightWithTable);
+  
+  summary.additions += textSummary.additions;
+  summary.deletions += textSummary.deletions;
+  summary.changes = summary.additions + summary.deletions;
 
   const detailed = generateDetailedReport(leftHtml, rightHtml);
 
@@ -61,7 +68,7 @@ const collectLinesWithStructure = (root) => {
   while ((node = walker.nextNode())) {
     const tag = node.tagName ? node.tagName.toLowerCase() : "";
     if (BLOCK_TAGS.has(tag) && !isInsideTable(node) && !isInsideTable(node.parentNode)) {
-      const text = node.textContent || "";
+      const text = (node.textContent || "").trim();
       const computedStyle = window.getComputedStyle ? window.getComputedStyle(node) : {};
       const height = node.offsetHeight || parseInt(computedStyle.lineHeight) || 20;
       
@@ -69,7 +76,7 @@ const collectLinesWithStructure = (root) => {
         element: node, 
         text, 
         originalText: text, 
-        isEmpty: text.trim().length === 0, 
+        isEmpty: text.length === 0, 
         tagName: tag,
         height: height,
         styles: {
@@ -89,45 +96,79 @@ const collectLinesWithStructure = (root) => {
   return lines;
 };
 
-const applyTrueLineByLineComparison = (ownHtml, otherHtml, side) => {
+const applyTrueLineByLineComparison = (ownHtml, otherHtml) => {
   const ownDiv = htmlToDiv(ownHtml);
   const otherDiv = htmlToDiv(otherHtml);
 
   const ownLines = collectLinesWithStructure(ownDiv);
   const otherLines = collectLinesWithStructure(otherDiv);
 
-  const alignedDiff = createTrueLineAlignment(ownLines, otherLines);
-  applyLineByLineDiffToDOM(ownDiv, alignedDiff, side);
+  const { alignedDiff, summary } = createTrueLineAlignment(ownLines, otherLines);
   
-  return ownDiv.innerHTML;
+  const leftFinal = applyLineByLineDiffToDOM(ownDiv, alignedDiff.left, "left");
+  const rightFinal = applyLineByLineDiffToDOM(otherDiv, alignedDiff.right, "right");
+  
+  return { leftFinal, rightFinal, textSummary: summary };
 };
 
-const createTrueLineAlignment = (ownLines, otherLines) => {
-  const ownTexts = ownLines.map(l => l.text || "");
-  const otherTexts = otherLines.map(l => l.text || "");
-  const parts = diffArrays(ownTexts, otherTexts, { comparator: (a, b) => a === b });
+const createTrueLineAlignment = (leftLines, rightLines) => {
+  const leftTexts = leftLines.map(l => l.text || "");
+  const rightTexts = rightLines.map(l => l.text || "");
+  
+  // Only compare non-empty lines for meaningful differences
+  const parts = diffArrays(leftTexts, rightTexts, { 
+    comparator: (a, b) => a.trim() === b.trim() 
+  });
 
-  const result = [];
-  let iOwn = 0;
-  let iOther = 0;
+  const leftResult = [];
+  const rightResult = [];
+  let iLeft = 0;
+  let iRight = 0;
+  let summary = { additions: 0, deletions: 0 };
 
   for (let p = 0; p < parts.length; p++) {
     const part = parts[p];
     
     if (part.added) {
-      // Lines present only in other document - create placeholders in own document
+      // Lines present only in right document
       for (let k = 0; k < part.value.length; k++) {
-        const otherLine = otherLines[iOther + k] || null;
-        result.push({ 
-          type: 'placeholder', 
-          lineNumber: result.length, 
-          content: '', 
-          element: null, 
-          otherLine: otherLine,
-          height: otherLine ? otherLine.height : 20
-        });
+        const rightLine = rightLines[iRight + k] || null;
+        if (rightLine && rightLine.text.trim()) {
+          summary.additions++;
+          rightResult.push({ 
+            type: 'added', 
+            lineNumber: rightResult.length, 
+            content: rightLine.text, 
+            element: rightLine.element
+          });
+          // Add placeholder in left
+          leftResult.push({ 
+            type: 'placeholder', 
+            lineNumber: leftResult.length, 
+            content: '', 
+            element: null, 
+            otherLine: rightLine,
+            height: rightLine.height
+          });
+        } else {
+          // Empty line, keep as is
+          rightResult.push({ 
+            type: 'unchanged', 
+            lineNumber: rightResult.length, 
+            content: rightLine ? rightLine.text : '', 
+            element: rightLine ? rightLine.element : null
+          });
+          leftResult.push({ 
+            type: 'placeholder', 
+            lineNumber: leftResult.length, 
+            content: '', 
+            element: null, 
+            otherLine: rightLine,
+            height: rightLine ? rightLine.height : 20
+          });
+        }
       }
-      iOther += part.count || part.value.length;
+      iRight += part.count || part.value.length;
       continue;
     }
     
@@ -141,85 +182,204 @@ const createTrueLineAlignment = (ownLines, otherLines) => {
         
         // Handle paired modifications
         for (let k = 0; k < pairCount; k++) {
-          const ownLine = ownLines[iOwn + k] || null;
-          const otherLine = otherLines[iOther + k] || null;
-          if (ownLine && otherLine) {
-            result.push({ 
-              type: 'modified', 
-              lineNumber: result.length, 
-              content: ownLine.text || '', 
-              otherContent: otherLine.text || '', 
-              element: ownLine.element, 
-              otherLine: otherLine
+          const leftLine = leftLines[iLeft + k] || null;
+          const rightLine = rightLines[iRight + k] || null;
+          
+          if (leftLine && rightLine && leftLine.text.trim() && rightLine.text.trim()) {
+            // Only mark as modified if there's actual content difference
+            if (leftLine.text.trim() !== rightLine.text.trim()) {
+              summary.deletions++;
+              summary.additions++;
+              leftResult.push({ 
+                type: 'modified', 
+                lineNumber: leftResult.length, 
+                content: leftLine.text, 
+                otherContent: rightLine.text, 
+                element: leftLine.element, 
+                otherLine: rightLine
+              });
+              rightResult.push({ 
+                type: 'modified', 
+                lineNumber: rightResult.length, 
+                content: rightLine.text, 
+                otherContent: leftLine.text, 
+                element: rightLine.element, 
+                otherLine: leftLine
+              });
+            } else {
+              // Same content, keep unchanged
+              leftResult.push({ 
+                type: 'unchanged', 
+                lineNumber: leftResult.length, 
+                content: leftLine.text, 
+                element: leftLine.element
+              });
+              rightResult.push({ 
+                type: 'unchanged', 
+                lineNumber: rightResult.length, 
+                content: rightLine.text, 
+                element: rightLine.element
+              });
+            }
+          } else {
+            // Handle empty lines
+            leftResult.push({ 
+              type: leftLine && leftLine.text.trim() ? 'removed' : 'unchanged', 
+              lineNumber: leftResult.length, 
+              content: leftLine ? leftLine.text : '', 
+              element: leftLine ? leftLine.element : null
+            });
+            rightResult.push({ 
+              type: rightLine && rightLine.text.trim() ? 'added' : 'unchanged', 
+              lineNumber: rightResult.length, 
+              content: rightLine ? rightLine.text : '', 
+              element: rightLine ? rightLine.element : null
             });
           }
         }
         
         // Handle remaining removed lines
         for (let k = pairCount; k < removedCount; k++) {
-          const ownLine = ownLines[iOwn + k] || null;
-          if (ownLine) {
-            result.push({ 
+          const leftLine = leftLines[iLeft + k] || null;
+          if (leftLine && leftLine.text.trim()) {
+            summary.deletions++;
+            leftResult.push({ 
               type: 'removed', 
-              lineNumber: result.length, 
-              content: ownLine.text || '', 
-              element: ownLine.element
+              lineNumber: leftResult.length, 
+              content: leftLine.text, 
+              element: leftLine.element
+            });
+            rightResult.push({ 
+              type: 'placeholder', 
+              lineNumber: rightResult.length, 
+              content: '', 
+              element: null, 
+              otherLine: leftLine,
+              height: leftLine.height
+            });
+          } else {
+            leftResult.push({ 
+              type: 'unchanged', 
+              lineNumber: leftResult.length, 
+              content: leftLine ? leftLine.text : '', 
+              element: leftLine ? leftLine.element : null
+            });
+            rightResult.push({ 
+              type: 'placeholder', 
+              lineNumber: rightResult.length, 
+              content: '', 
+              element: null, 
+              otherLine: leftLine,
+              height: leftLine ? leftLine.height : 20
             });
           }
         }
         
-        // Handle remaining added lines as placeholders
+        // Handle remaining added lines
         for (let k = pairCount; k < addedCount; k++) {
-          const otherLine = otherLines[iOther + k] || null;
-          result.push({ 
-            type: 'placeholder', 
-            lineNumber: result.length, 
-            content: '', 
-            element: null, 
-            otherLine: otherLine,
-            height: otherLine ? otherLine.height : 20
-          });
+          const rightLine = rightLines[iRight + k] || null;
+          if (rightLine && rightLine.text.trim()) {
+            summary.additions++;
+            rightResult.push({ 
+              type: 'added', 
+              lineNumber: rightResult.length, 
+              content: rightLine.text, 
+              element: rightLine.element
+            });
+            leftResult.push({ 
+              type: 'placeholder', 
+              lineNumber: leftResult.length, 
+              content: '', 
+              element: null, 
+              otherLine: rightLine,
+              height: rightLine.height
+            });
+          } else {
+            rightResult.push({ 
+              type: 'unchanged', 
+              lineNumber: rightResult.length, 
+              content: rightLine ? rightLine.text : '', 
+              element: rightLine ? rightLine.element : null
+            });
+            leftResult.push({ 
+              type: 'placeholder', 
+              lineNumber: leftResult.length, 
+              content: '', 
+              element: null, 
+              otherLine: rightLine,
+              height: rightLine ? rightLine.height : 20
+            });
+          }
         }
         
-        iOwn += removedCount;
-        iOther += addedCount;
+        iLeft += removedCount;
+        iRight += addedCount;
         p++; // Skip the next added part as we've processed it
         continue;
       }
       
       // Pure removals
       for (let k = 0; k < (part.count || part.value.length); k++) {
-        const ownLine = ownLines[iOwn + k] || null;
-        if (ownLine) {
-          result.push({ 
+        const leftLine = leftLines[iLeft + k] || null;
+        if (leftLine && leftLine.text.trim()) {
+          summary.deletions++;
+          leftResult.push({ 
             type: 'removed', 
-            lineNumber: result.length, 
-            content: ownLine.text || '', 
-            element: ownLine.element
+            lineNumber: leftResult.length, 
+            content: leftLine.text, 
+            element: leftLine.element
+          });
+          rightResult.push({ 
+            type: 'placeholder', 
+            lineNumber: rightResult.length, 
+            content: '', 
+            element: null, 
+            otherLine: leftLine,
+            height: leftLine.height
+          });
+        } else {
+          leftResult.push({ 
+            type: 'unchanged', 
+            lineNumber: leftResult.length, 
+            content: leftLine ? leftLine.text : '', 
+            element: leftLine ? leftLine.element : null
+          });
+          rightResult.push({ 
+            type: 'placeholder', 
+            lineNumber: rightResult.length, 
+            content: '', 
+            element: null, 
+            otherLine: leftLine,
+            height: leftLine ? leftLine.height : 20
           });
         }
       }
-      iOwn += part.count || part.value.length;
+      iLeft += part.count || part.value.length;
       continue;
     }
     
     // Equal block - unchanged lines
     for (let k = 0; k < (part.count || part.value.length); k++) {
-      const ownLine = ownLines[iOwn + k];
-      const otherLine = otherLines[iOther + k];
-      result.push({ 
+      const leftLine = leftLines[iLeft + k];
+      const rightLine = rightLines[iRight + k];
+      leftResult.push({ 
         type: 'unchanged', 
-        lineNumber: result.length, 
-        content: ownLine.text || '', 
-        element: ownLine.element,
-        otherLine: otherLine
+        lineNumber: leftResult.length, 
+        content: leftLine ? leftLine.text : '', 
+        element: leftLine ? leftLine.element : null
+      });
+      rightResult.push({ 
+        type: 'unchanged', 
+        lineNumber: rightResult.length, 
+        content: rightLine ? rightLine.text : '', 
+        element: rightLine ? rightLine.element : null
       });
     }
-    iOwn += part.count || part.value.length;
-    iOther += part.count || part.value.length;
+    iLeft += part.count || part.value.length;
+    iRight += part.count || part.value.length;
   }
 
-  return result;
+  return { alignedDiff: { left: leftResult, right: rightResult }, summary };
 };
 
 const applyLineByLineDiffToDOM = (container, diffResult, side) => {
@@ -234,7 +394,23 @@ const applyLineByLineDiffToDOM = (container, diffResult, side) => {
       processedElements.add(element);
       
       element.classList.add('git-line-removed');
-      applyInlineWordDiff(element, element.textContent || '', '', side);
+      // Only apply inline diff if there's actual content
+      if (element.textContent && element.textContent.trim()) {
+        applyInlineWordDiff(element, element.textContent, '', side);
+      }
+      return;
+    }
+
+    if (type === 'added') {
+      const element = diffLine.element;
+      if (!element || processedElements.has(element)) return;
+      processedElements.add(element);
+      
+      element.classList.add('git-line-added');
+      // Only apply inline diff if there's actual content
+      if (element.textContent && element.textContent.trim()) {
+        applyInlineWordDiff(element, '', element.textContent, side);
+      }
       return;
     }
 
@@ -245,8 +421,12 @@ const applyLineByLineDiffToDOM = (container, diffResult, side) => {
       
       const ownText = element.textContent || '';
       const otherText = diffLine.otherContent || '';
-      element.classList.add('git-line-modified');
-      applyInlineWordDiff(element, ownText, otherText, side);
+      
+      // Only apply modification highlighting if content actually differs
+      if (ownText.trim() !== otherText.trim()) {
+        element.classList.add('git-line-modified');
+        applyInlineWordDiff(element, ownText, otherText, side);
+      }
       return;
     }
 
@@ -285,19 +465,35 @@ const applyLineByLineDiffToDOM = (container, diffResult, side) => {
       return;
     }
 
-    if (type === 'unchanged') {
-      // Leave unchanged lines as they are
-      return;
-    }
+    // For unchanged lines, do nothing - preserve original formatting
   });
+  
+  return container.innerHTML;
 };
 
 const applyInlineWordDiff = (element, ownText, otherText, side) => {
+  // Only apply inline diff if there's meaningful content difference
+  if (!ownText.trim() && !otherText.trim()) {
+    return; // Both empty, no diff needed
+  }
+  
+  if (ownText.trim() === otherText.trim()) {
+    return; // Same content, no diff needed
+  }
+
   const diffs = diffWordsWithSpace(ownText || '', otherText || '');
 
-  // Clear existing content and rebuild with diff highlighting
+  // Check if there are actual differences
+  const hasChanges = diffs.some(diff => diff.added || diff.removed);
+  if (!hasChanges) {
+    return; // No actual changes, preserve original
+  }
+
+  // Store original HTML structure
   const originalHTML = element.innerHTML;
   element.innerHTML = '';
+
+  let hasContent = false;
 
   diffs.forEach((diff) => {
     const span = document.createElement('span');
@@ -305,11 +501,14 @@ const applyInlineWordDiff = (element, ownText, otherText, side) => {
     if (diff.added && side === 'right') {
       span.className = 'git-inline-added';
       span.textContent = diff.value;
+      hasContent = true;
     } else if (diff.removed && side === 'left') {
       span.className = 'git-inline-removed';
       span.textContent = diff.value;
+      hasContent = true;
     } else if (!diff.added && !diff.removed) {
       span.textContent = diff.value;
+      if (diff.value.trim()) hasContent = true;
     } else {
       // Don't show additions on left side or removals on right side
       return;
@@ -318,8 +517,10 @@ const applyInlineWordDiff = (element, ownText, otherText, side) => {
     element.appendChild(span);
   });
 
-  // If element is empty after processing, add a non-breaking space to maintain height
-  if (!element.textContent.trim()) {
+  // If no meaningful content was added, restore original
+  if (!hasContent) {
+    element.innerHTML = originalHTML;
+  } else if (!element.textContent.trim()) {
     element.innerHTML = '&nbsp;';
   }
 };
@@ -345,10 +546,15 @@ const applyImageDiffOutlines = (leftHtml, rightHtml) => {
       ri.classList.add("structural-added");
       additions++;
     }
-    else if (li && ri && (li.getAttribute("src") || "") !== (ri.getAttribute("src") || "")) {
-      li.classList.add("structural-modified");
-      ri.classList.add("structural-modified");
-      additions++; deletions++;
+    else if (li && ri) {
+      const leftSrc = li.getAttribute("src") || "";
+      const rightSrc = ri.getAttribute("src") || "";
+      if (leftSrc !== rightSrc) {
+        li.classList.add("structural-modified");
+        ri.classList.add("structural-modified");
+        additions++; 
+        deletions++;
+      }
     }
   }
 
@@ -390,22 +596,24 @@ const applyTableCellDiffs = (ownHtml, otherHtml, side) => {
         const xc = otherCells[c];
         if (!oc) continue;
 
-        const ownText = (oc.textContent || "");
-        const otherText = (xc ? xc.textContent : "");
+        const ownText = (oc.textContent || "").trim();
+        const otherText = (xc ? xc.textContent : "").trim();
 
-        if (!xc) {
+        if (!xc && ownText) {
           if (side === "left") {
             oc.classList.add("git-cell-removed");
             orow.classList.add("git-line-removed");
           }
           continue;
         }
+        
         if (xc && !ownText && otherText && side === "right") {
           oc.classList.add("git-cell-added");
           orow.classList.add("git-line-added");
+          continue;
         }
 
-        if (xc && ownText !== otherText) {
+        if (xc && ownText && otherText && ownText !== otherText) {
           oc.classList.add("git-cell-modified");
           applyInlineWordDiff(oc, ownText, otherText, side);
         }
@@ -541,14 +749,18 @@ export const generateDetailedReport = (leftHtml, rightHtml) => {
     if (part.added) {
       for (let k = 0; k < count; k++) {
         const r = rightLines[iR++];
-        lines.push({ v1: '', v2: String(v2++), status: 'ADDED', diffHtml: inlineDiffHtml('', r.text), formatChanges: [`added line`] });
+        if (r && r.text.trim()) {
+          lines.push({ v1: '', v2: String(v2++), status: 'ADDED', diffHtml: inlineDiffHtml('', r.text), formatChanges: [`added line`] });
+        }
       }
       continue;
     }
     if (part.removed) {
       for (let k = 0; k < count; k++) {
         const l = leftLines[iL++];
-        lines.push({ v1: String(v1++), v2: '', status: 'REMOVED', diffHtml: inlineDiffHtml(l.text, ''), formatChanges: [`removed line`] });
+        if (l && l.text.trim()) {
+          lines.push({ v1: String(v1++), v2: '', status: 'REMOVED', diffHtml: inlineDiffHtml(l.text, ''), formatChanges: [`removed line`] });
+        }
       }
       continue;
     }
@@ -556,13 +768,16 @@ export const generateDetailedReport = (leftHtml, rightHtml) => {
     for (let k = 0; k < count; k++) {
       const l = leftLines[iL++];
       const r = rightLines[iR++];
-      const textEqual = (l.text || '') === (r.text || '');
+      if (!l || !r) continue;
+      
+      const textEqual = (l.text || '').trim() === (r.text || '').trim();
       const fmtChanges = compareFormat(l.fmt, r.fmt);
+      
       if (textEqual && fmtChanges.length > 0) {
         lines.push({ v1: String(v1++), v2: String(v2++), status: 'FORMATTING-ONLY', diffHtml: visibleSpaces(escapeHtml(l.text || '')), formatChanges: fmtChanges });
       } else if (textEqual) {
         lines.push({ v1: String(v1++), v2: String(v2++), status: 'UNCHANGED', diffHtml: visibleSpaces(escapeHtml(l.text || '')), formatChanges: [] });
-      } else {
+      } else if (l.text.trim() || r.text.trim()) {
         lines.push({ v1: String(v1++), v2: String(v2++), status: 'MODIFIED', diffHtml: inlineDiffHtml(l.text, r.text), formatChanges: fmtChanges });
       }
     }
@@ -592,9 +807,9 @@ export const generateDetailedReport = (leftHtml, rightHtml) => {
         const cellL = cL[ci], cellR = cR[ci];
         if (!cellL && cellR) { tableReport.push({ table: ti+1, row: ri+1, col: ci+1, status: 'ADDED' }); continue; }
         if (cellL && !cellR) { tableReport.push({ table: ti+1, row: ri+1, col: ci+1, status: 'REMOVED' }); continue; }
-        const a = cellL.textContent || '';
-        const b = cellR.textContent || '';
-        if (a !== b) {
+        const a = (cellL.textContent || '').trim();
+        const b = (cellR.textContent || '').trim();
+        if (a && b && a !== b) {
           tableReport.push({ table: ti+1, row: ri+1, col: ci+1, status: 'MODIFIED', diffHtml: inlineDiffHtml(a, b) });
         }
       }

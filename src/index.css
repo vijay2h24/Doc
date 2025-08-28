@@ -87,6 +87,27 @@
 .word-document-preview .git-line-added,
 .word-document-preview .git-line-removed { font-family: inherit; font-size: inherit; line-height: inherit; white-space: pre-wrap; }
 
+/* Only highlight actual changes - preserve original formatting for unchanged content */
+.word-document-preview .git-line-unchanged { 
+  /* No highlighting for unchanged lines - preserve original formatting completely */
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: inherit;
+}
+
+/* Ensure unchanged content maintains original spacing and formatting */
+.word-document-preview .git-line-unchanged * {
+  background: inherit;
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+  margin: inherit;
+  padding: inherit;
+}
+
 /* Structural highlights (minimal, non-intrusive) */
 .word-document-preview img.structural-added,
 .word-document-preview table.structural-added {
