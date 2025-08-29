@@ -7,34 +7,20 @@ const DocumentPreview = ({ document, diffs, title, containerId }) => {
 
   const content = diffs ? renderHtmlDifferences(diffs) : document.originalHtmlContent;
 
-  // Calculate and apply scale to fit content within preview width while preserving 100% proportions
+  // Handle scroll synchronization between containers
   useEffect(() => {
-    if (contentRef.current && containerRef.current) {
-      const calculateScale = () => {
-        const contentWidth = contentRef.current.scrollWidth;
-        const containerWidth = containerRef.current.clientWidth - 16; // Account for padding
-        const scale = Math.min(1, containerWidth / contentWidth);
-        
-        contentRef.current.style.transform = `scale(${scale})`;
-        contentRef.current.style.transformOrigin = 'top left';
-        contentRef.current.style.width = `${100 / scale}%`;
-      };
+    if (!containerRef.current || !containerId) return;
 
-      // Calculate scale after content loads
-      const timer = setTimeout(calculateScale, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [content]);
-
-  // Sync scroll between left and right containers
-  useEffect(() => {
-    if (!containerRef.current) return;
+    const container = containerRef.current;
+    let isScrolling = false;
 
     const handleScroll = (e) => {
+      if (isScrolling) return;
+      
       const sourceContainer = e.target;
       const sourceId = sourceContainer.id;
       
-      // Determine the target container
+      // Determine the target container ID
       const targetId = sourceId.includes('left') 
         ? sourceId.replace('left', 'right') 
         : sourceId.replace('right', 'left');
@@ -42,26 +28,23 @@ const DocumentPreview = ({ document, diffs, title, containerId }) => {
       
       if (targetContainer && targetContainer !== sourceContainer) {
         // Calculate scroll ratio
-        const sourceMaxScroll = Math.max(0, sourceContainer.scrollHeight - sourceContainer.clientHeight);
-        const targetMaxScroll = Math.max(0, targetContainer.scrollHeight - targetContainer.clientHeight);
+        const sourceMaxScroll = Math.max(1, sourceContainer.scrollHeight - sourceContainer.clientHeight);
+        const targetMaxScroll = Math.max(1, targetContainer.scrollHeight - targetContainer.clientHeight);
         
-        if (sourceMaxScroll > 0 && targetMaxScroll > 0) {
-          const scrollRatio = sourceContainer.scrollTop / sourceMaxScroll;
-          const targetScrollTop = Math.round(targetMaxScroll * scrollRatio);
-          
-          // Temporarily remove scroll listener to prevent infinite loop
-          targetContainer.removeEventListener('scroll', handleScroll);
-          targetContainer.scrollTop = targetScrollTop;
-          
-          // Re-add listener after a short delay
-          setTimeout(() => {
-            targetContainer.addEventListener('scroll', handleScroll, { passive: true });
-          }, 50);
-        }
+        const scrollRatio = sourceContainer.scrollTop / sourceMaxScroll;
+        const targetScrollTop = Math.round(targetMaxScroll * scrollRatio);
+        
+        // Prevent infinite loop
+        isScrolling = true;
+        targetContainer.scrollTop = targetScrollTop;
+        
+        // Reset flag after a short delay
+        setTimeout(() => {
+          isScrolling = false;
+        }, 50);
       }
     };
 
-    const container = containerRef.current;
     container.addEventListener('scroll', handleScroll, { passive: true });
 
     return () => {
@@ -69,29 +52,88 @@ const DocumentPreview = ({ document, diffs, title, containerId }) => {
     };
   }, [containerId]);
 
-	return (
-		<div className="min-w-0 h-full flex flex-col bg-white rounded-lg shadow-lg border border-gray-200">
-			<div className="border-b border-gray-200 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-t-lg">
-				<h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-					<div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-					{title}
-				</h3>
-				<p className="text-sm text-gray-600 truncate mt-1" title={document.name}>
-					📄 {document.name}
-				</p>
-			</div>
-			
-			<div className="flex-1 overflow-auto" id={containerId} ref={containerRef}>
-				<div className="p-2 bg-white min-h-full">
-					<div 
-						ref={contentRef}
-						className="word-document-preview"
-						dangerouslySetInnerHTML={{ __html: content }}
-					/>
-				</div>
-			</div>
-		</div>
-	);
+  // Auto-scale content to fit container width while preserving proportions
+  useEffect(() => {
+    if (!contentRef.current || !containerRef.current) return;
+
+    const adjustScale = () => {
+      const content = contentRef.current;
+      const container = containerRef.current;
+      
+      // Reset transform to measure natural size
+      content.style.transform = 'none';
+      content.style.width = 'auto';
+      
+      // Measure content and container
+      const contentWidth = content.scrollWidth;
+      const containerWidth = container.clientWidth - 32; // Account for padding
+      
+      if (contentWidth > containerWidth) {
+        const scale = containerWidth / contentWidth;
+        content.style.transform = `scale(${scale})`;
+        content.style.transformOrigin = 'top left';
+        content.style.width = `${100 / scale}%`;
+        
+        // Adjust container height to account for scaling
+        const scaledHeight = content.scrollHeight * scale;
+        content.style.height = `${content.scrollHeight}px`;
+      } else {
+        content.style.transform = 'none';
+        content.style.width = '100%';
+        content.style.height = 'auto';
+      }
+    };
+
+    // Adjust scale after content loads and on resize
+    const timer = setTimeout(adjustScale, 200);
+    
+    const resizeObserver = new ResizeObserver(adjustScale);
+    resizeObserver.observe(containerRef.current);
+
+    return () => {
+      clearTimeout(timer);
+      resizeObserver.disconnect();
+    };
+  }, [content]);
+
+  return (
+    <div className="h-full flex flex-col bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+      {/* Header */}
+      <div className="border-b border-gray-200 p-4 bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50">
+        <div className="flex items-center gap-3">
+          <div className="w-3 h-3 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full shadow-sm"></div>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-lg font-semibold text-gray-800 truncate">
+              {title}
+            </h3>
+            <p className="text-sm text-gray-600 truncate mt-0.5" title={document.name}>
+              📄 {document.name}
+            </p>
+          </div>
+        </div>
+      </div>
+      
+      {/* Content */}
+      <div 
+        className="flex-1 overflow-auto bg-white" 
+        id={containerId} 
+        ref={containerRef}
+        style={{ scrollBehavior: 'smooth' }}
+      >
+        <div className="p-4">
+          <div 
+            ref={contentRef}
+            className="word-document-preview bg-white shadow-sm border border-gray-100 rounded-lg p-6"
+            dangerouslySetInnerHTML={{ __html: content }}
+            style={{ 
+              minHeight: '100%',
+              transition: 'transform 0.2s ease-out'
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  );
 };
 
-export default DocumentPreview; 
+export default DocumentPreview;
