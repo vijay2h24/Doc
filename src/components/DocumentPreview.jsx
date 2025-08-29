@@ -26,6 +26,49 @@ const DocumentPreview = ({ document, diffs, title, containerId }) => {
     }
   }, [content]);
 
+  // Sync scroll between left and right containers
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const handleScroll = (e) => {
+      const sourceContainer = e.target;
+      const sourceId = sourceContainer.id;
+      
+      // Determine the target container
+      const targetId = sourceId.includes('left') 
+        ? sourceId.replace('left', 'right') 
+        : sourceId.replace('right', 'left');
+      const targetContainer = document.getElementById(targetId);
+      
+      if (targetContainer && targetContainer !== sourceContainer) {
+        // Calculate scroll ratio
+        const sourceMaxScroll = Math.max(0, sourceContainer.scrollHeight - sourceContainer.clientHeight);
+        const targetMaxScroll = Math.max(0, targetContainer.scrollHeight - targetContainer.clientHeight);
+        
+        if (sourceMaxScroll > 0 && targetMaxScroll > 0) {
+          const scrollRatio = sourceContainer.scrollTop / sourceMaxScroll;
+          const targetScrollTop = Math.round(targetMaxScroll * scrollRatio);
+          
+          // Temporarily remove scroll listener to prevent infinite loop
+          targetContainer.removeEventListener('scroll', handleScroll);
+          targetContainer.scrollTop = targetScrollTop;
+          
+          // Re-add listener after a short delay
+          setTimeout(() => {
+            targetContainer.addEventListener('scroll', handleScroll, { passive: true });
+          }, 50);
+        }
+      }
+    };
+
+    const container = containerRef.current;
+    container.addEventListener('scroll', handleScroll, { passive: true });
+
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+    };
+  }, [containerId]);
+
 	return (
 		<div className="min-w-0 h-full flex flex-col bg-white rounded-lg shadow-lg border border-gray-200">
 			<div className="border-b border-gray-200 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-t-lg">
@@ -38,7 +81,7 @@ const DocumentPreview = ({ document, diffs, title, containerId }) => {
 				</p>
 			</div>
 			
-			<div className="flex-1 overflow-auto" id={containerId} onClick={() => jumpToNextChange(containerId)} ref={containerRef}>
+			<div className="flex-1 overflow-auto" id={containerId} ref={containerRef}>
 				<div className="p-2 bg-white min-h-full">
 					<div 
 						ref={contentRef}
@@ -49,30 +92,6 @@ const DocumentPreview = ({ document, diffs, title, containerId }) => {
 			</div>
 		</div>
 	);
-};
-
-const jumpToNextChange = (containerId) => {
-  const container = document.getElementById(containerId);
-  if (!container) return;
-
-  const changeSelectors = ['.git-line-added', '.git-line-removed', '.git-line-modified', '.git-inline-added', '.git-inline-removed'];
-  const nodes = changeSelectors.flatMap(sel => Array.from(container.querySelectorAll(sel)));
-  if (nodes.length === 0) return;
-
-  const currentTop = container.scrollTop;
-  const viewBottom = currentTop + container.clientHeight;
-
-  // find first change that is below current view by small threshold
-  const threshold = 8;
-  const next = nodes.find(n => (n.offsetTop - threshold) > currentTop && (n.offsetTop) > currentTop);
-  const target = next || nodes[0];
-
-  // Align target near top
-  container.scrollTop = Math.max(target.offsetTop - 12, 0);
-  // Mirror scroll to sibling container if exists
-  const siblingId = containerId.includes('left') ? containerId.replace('left', 'right') : containerId.replace('right', 'left');
-  const sibling = document.getElementById(siblingId);
-  if (sibling) sibling.scrollTop = container.scrollTop;
 };
 
 export default DocumentPreview; 
