@@ -1,40 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
 
-const LINE_CLASSES = {
-  added: 'git-line-added',
-  removed: 'git-line-removed',
-  modified: 'git-line-modified'
-};
-const INLINE_CLASSES = {
-  added: 'git-inline-added',
-  removed: 'git-inline-removed'
-};
-const CELL_CLASSES = {
-  added: 'git-cell-added',
-  removed: 'git-cell-removed',
-  modified: 'git-cell-modified'
-};
-const STRUCT_CLASSES = {
-  added: 'structural-added',
-  removed: 'structural-removed',
-  modified: 'structural-modified'
-};
-const BLOCK_SELECTOR = 'p,h1,h2,h3,h4,h5,h6,li,pre,div';
+// All possible change indicator classes
 const CHANGE_SELECTORS = [
   '.git-line-added',
-  '.git-line-removed',
+  '.git-line-removed', 
   '.git-line-modified',
   '.git-inline-added',
   '.git-inline-removed',
   '.git-cell-added',
   '.git-cell-removed',
   '.git-cell-modified',
-  'img.structural-added',
-  'img.structural-removed',
-  'img.structural-modified',
-  'table.structural-added',
-  'table.structural-removed',
-  'table.structural-modified'
+  '.structural-added',
+  '.structural-removed',
+  '.structural-modified'
 ];
 
 const getOffsetTopRelativeTo = (node, ancestor) => {
@@ -49,9 +27,12 @@ const getOffsetTopRelativeTo = (node, ancestor) => {
 
 const findMarkerTarget = (el) => {
   if (!el) return el;
-  // Prefer block-level ancestor for stable positioning
-  const block = el.closest(BLOCK_SELECTOR);
-  return block || el;
+  // For inline changes, use the parent block element
+  if (el.classList.contains('git-inline-added') || el.classList.contains('git-inline-removed')) {
+    const block = el.closest('p,h1,h2,h3,h4,h5,h6,li,div,td,th');
+    return block || el;
+  }
+  return el;
 };
 
 const MiniMap = ({ leftContainerId, rightContainerId }) => {
@@ -64,39 +45,80 @@ const MiniMap = ({ leftContainerId, rightContainerId }) => {
     right: document.getElementById(rightContainerId)
   });
 
-  const collectMarkersFromPane = (pane) => {
+  const collectMarkersFromPane = (pane, side) => {
     if (!pane) return [];
-    const maxScroll = Math.max(1, pane.scrollHeight - pane.clientHeight);
+    
+    const scrollableHeight = Math.max(1, pane.scrollHeight);
     const nodes = Array.from(pane.querySelectorAll(CHANGE_SELECTORS.join(',')));
-    const list = [];
+    const markers = [];
 
     nodes.forEach((el) => {
-      const isAdded = el.classList.contains(LINE_CLASSES.added) || el.classList.contains(INLINE_CLASSES.added) || el.classList.contains(CELL_CLASSES.added) || el.classList.contains(STRUCT_CLASSES.added);
-      const isRemoved = el.classList.contains(LINE_CLASSES.removed) || el.classList.contains(INLINE_CLASSES.removed) || el.classList.contains(CELL_CLASSES.removed) || el.classList.contains(STRUCT_CLASSES.removed);
-      const isModified = el.classList.contains(LINE_CLASSES.modified) || el.classList.contains(CELL_CLASSES.modified) || el.classList.contains(STRUCT_CLASSES.modified);
+      // Determine change type and color
+      let color = '#6b7280'; // default gray
+      let changeType = 'unknown';
+      
+      if (el.classList.contains('git-line-added') || 
+          el.classList.contains('git-inline-added') || 
+          el.classList.contains('git-cell-added') ||
+          el.classList.contains('structural-added')) {
+        color = '#22c55e'; // green
+        changeType = 'added';
+      } else if (el.classList.contains('git-line-removed') || 
+                 el.classList.contains('git-inline-removed') || 
+                 el.classList.contains('git-cell-removed') ||
+                 el.classList.contains('structural-removed')) {
+        color = '#ef4444'; // red
+        changeType = 'removed';
+      } else if (el.classList.contains('git-line-modified') || 
+                 el.classList.contains('git-cell-modified') ||
+                 el.classList.contains('structural-modified')) {
+        color = '#f59e0b'; // yellow/orange
+        changeType = 'modified';
+      }
+
       const target = findMarkerTarget(el);
       const topWithinPane = getOffsetTopRelativeTo(target, pane);
-      const ratio = Math.min(1, Math.max(0, topWithinPane / (maxScroll || 1)));
-      const color = isAdded ? '#28a745' : isRemoved ? '#dc3545' : '#ffc107';
-      list.push({ ratio, color });
+      const ratio = Math.min(1, Math.max(0, topWithinPane / scrollableHeight));
+      
+      markers.push({ 
+        ratio, 
+        color, 
+        changeType,
+        side,
+        element: el,
+        target
+      });
     });
 
-    return list;
+    return markers;
   };
 
   const computeMarkers = () => {
     const { left, right } = getContainers();
     if (!left || !right) return [];
 
-    const all = [...collectMarkersFromPane(left), ...collectMarkersFromPane(right)];
+    const leftMarkers = collectMarkersFromPane(left, 'left');
+    const rightMarkers = collectMarkersFromPane(right, 'right');
+    const allMarkers = [...leftMarkers, ...rightMarkers];
 
-    // Deduplicate nearby markers to avoid dense stacking
-    const sorted = all.sort((a, b) => a.ratio - b.ratio);
+    // Sort by position
+    const sorted = allMarkers.sort((a, b) => a.ratio - b.ratio);
+    
+    // Deduplicate markers that are very close to each other
     const deduped = [];
-    const threshold = 0.01; // 1% of scroll height to reduce clutter
-    sorted.forEach((m) => {
-      const last = deduped[deduped.length - 1];
-      if (!last || Math.abs(last.ratio - m.ratio) > threshold) deduped.push(m);
+    const threshold = 0.008; // Reduced threshold for better precision
+    
+    sorted.forEach((marker) => {
+      const existing = deduped.find(m => Math.abs(m.ratio - marker.ratio) <= threshold);
+      if (!existing) {
+        deduped.push(marker);
+      } else {
+        // If we have overlapping markers, prefer the more specific one
+        if (marker.changeType !== 'unknown' && existing.changeType === 'unknown') {
+          const index = deduped.indexOf(existing);
+          deduped[index] = marker;
+        }
+      }
     });
 
     return deduped;
@@ -105,9 +127,11 @@ const MiniMap = ({ leftContainerId, rightContainerId }) => {
   const computeViewport = () => {
     const { left } = getContainers();
     if (!left || !containerRef.current) return { topRatio: 0, heightRatio: 0 };
-    const maxScroll = Math.max(1, left.scrollHeight - left.clientHeight);
-    const topRatio = Math.min(1, Math.max(0, left.scrollTop / maxScroll));
-    const heightRatio = Math.min(1, left.clientHeight / (left.scrollHeight || 1));
+    
+    const scrollableHeight = Math.max(1, left.scrollHeight - left.clientHeight);
+    const topRatio = scrollableHeight > 0 ? Math.min(1, Math.max(0, left.scrollTop / scrollableHeight)) : 0;
+    const heightRatio = left.scrollHeight > 0 ? Math.min(1, left.clientHeight / left.scrollHeight) : 1;
+    
     return { topRatio, heightRatio };
   };
 
@@ -117,23 +141,56 @@ const MiniMap = ({ leftContainerId, rightContainerId }) => {
   };
 
   useEffect(() => {
-    refresh();
+    // Initial refresh with delay to ensure content is rendered
+    const initialTimer = setTimeout(refresh, 200);
+    
     const { left, right } = getContainers();
-    if (!(left && right)) return;
+    if (!(left && right)) return () => clearTimeout(initialTimer);
 
-    const onScroll = () => refresh();
-    left.addEventListener('scroll', onScroll);
-    right.addEventListener('scroll', onScroll);
+    const onScroll = () => {
+      setViewport(computeViewport());
+    };
+    
+    const onContentChange = () => {
+      // Debounce content changes
+      clearTimeout(window.minimapRefreshTimer);
+      window.minimapRefreshTimer = setTimeout(refresh, 100);
+    };
 
-    const obsLeft = new MutationObserver(refresh);
-    const obsRight = new MutationObserver(refresh);
-    obsLeft.observe(left, { childList: true, subtree: true, attributes: true });
-    obsRight.observe(right, { childList: true, subtree: true, attributes: true });
+    // Listen for scroll events
+    left.addEventListener('scroll', onScroll, { passive: true });
+    right.addEventListener('scroll', onScroll, { passive: true });
 
-    const onResize = () => refresh();
+    // Listen for content changes with more comprehensive observation
+    const obsLeft = new MutationObserver(onContentChange);
+    const obsRight = new MutationObserver(onContentChange);
+    
+    obsLeft.observe(left, { 
+      childList: true, 
+      subtree: true, 
+      attributes: true, 
+      attributeFilter: ['class', 'style'],
+      characterData: true 
+    });
+    obsRight.observe(right, { 
+      childList: true, 
+      subtree: true, 
+      attributes: true, 
+      attributeFilter: ['class', 'style'],
+      characterData: true 
+    });
+
+    // Listen for window resize
+    const onResize = () => {
+      clearTimeout(window.minimapResizeTimer);
+      window.minimapResizeTimer = setTimeout(refresh, 150);
+    };
     window.addEventListener('resize', onResize);
 
     return () => {
+      clearTimeout(initialTimer);
+      clearTimeout(window.minimapRefreshTimer);
+      clearTimeout(window.minimapResizeTimer);
       left.removeEventListener('scroll', onScroll);
       right.removeEventListener('scroll', onScroll);
       obsLeft.disconnect();
@@ -145,44 +202,109 @@ const MiniMap = ({ leftContainerId, rightContainerId }) => {
   const onClick = (e) => {
     const { left, right } = getContainers();
     if (!left || !right || !containerRef.current) return;
+    
     const rect = containerRef.current.getBoundingClientRect();
     const clickRatio = (e.clientY - rect.top) / rect.height;
 
-    const sorted = (markers || []).slice().sort((a, b) => a.ratio - b.ratio);
-    const target = sorted.reduce((best, m) => {
-      const dist = Math.abs(m.ratio - clickRatio);
-      if (!best || dist < best.dist) return { m, dist };
+    // Find the closest marker to the click position
+    const sortedMarkers = (markers || []).slice().sort((a, b) => a.ratio - b.ratio);
+    const target = sortedMarkers.reduce((best, marker) => {
+      const dist = Math.abs(marker.ratio - clickRatio);
+      if (!best || dist < best.dist) return { marker, dist };
       return best;
     }, null);
-    if (!target) return;
 
+    if (!target) {
+      // No markers, just scroll to the clicked position
+      const scrollToRatio = (pane, ratio) => {
+        const maxScroll = Math.max(0, pane.scrollHeight - pane.clientHeight);
+        const y = Math.max(0, Math.min(maxScroll, Math.round(maxScroll * ratio)));
+        pane.scrollTo({ top: y, behavior: 'smooth' });
+      };
+      
+      scrollToRatio(left, clickRatio);
+      scrollToRatio(right, clickRatio);
+      return;
+    }
+
+    // Scroll to the target marker
     const scrollToRatio = (pane, ratio) => {
       const maxScroll = Math.max(0, pane.scrollHeight - pane.clientHeight);
       const y = Math.max(0, Math.min(maxScroll, Math.round(maxScroll * ratio)));
       pane.scrollTo({ top: y, behavior: 'smooth' });
     };
 
-    scrollToRatio(left, target.m.ratio);
-    scrollToRatio(right, target.m.ratio);
+    scrollToRatio(left, target.marker.ratio);
+    scrollToRatio(right, target.marker.ratio);
+
+    // Highlight the target element briefly
+    if (target.marker.element) {
+      target.marker.element.style.transition = 'box-shadow 0.3s ease';
+      target.marker.element.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.5)';
+      setTimeout(() => {
+        target.marker.element.style.boxShadow = '';
+      }, 1000);
+    }
   };
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 h-48 p-3 select-none self-start">
-      <div ref={containerRef} onClick={onClick} className="relative w-full h-full cursor-pointer" title="Click to jump to nearest change">
-        <div className="absolute inset-0 bg-gray-50 rounded" />
-        {markers.map((m, i) => (
-          <div key={i} className="absolute left-0 right-0" style={{ top: `${m.ratio * 100}%`, height: 3, background: m.color, opacity: 0.95 }} />
+      <div className="text-xs text-gray-500 mb-2 text-center font-medium">
+        Changes Map
+      </div>
+      <div 
+        ref={containerRef} 
+        onClick={onClick} 
+        className="relative w-full h-full cursor-pointer bg-gray-50 rounded border border-gray-200" 
+        title="Click to jump to changes"
+      >
+        {/* Background grid for better visual reference */}
+        <div className="absolute inset-0 opacity-20">
+          {[...Array(10)].map((_, i) => (
+            <div 
+              key={i}
+              className="absolute left-0 right-0 border-t border-gray-300"
+              style={{ top: `${(i + 1) * 10}%` }}
+            />
+          ))}
+        </div>
+        
+        {/* Change markers */}
+        {markers.map((marker, i) => (
+          <div 
+            key={i} 
+            className="absolute left-0 right-0 rounded-sm transition-opacity hover:opacity-100" 
+            style={{ 
+              top: `${marker.ratio * 100}%`, 
+              height: '4px', 
+              background: marker.color,
+              opacity: 0.85,
+              zIndex: 10
+            }}
+            title={`${marker.changeType} change`}
+          />
         ))}
+        
+        {/* Viewport indicator */}
         <div
-          className="absolute left-0 right-0 border border-blue-400/70 bg-blue-200/20 rounded"
-          style={{ top: `${viewport.topRatio * 100}%`, height: `${viewport.heightRatio * 100}%` }}
+          className="absolute left-0 right-0 border-2 border-blue-500 bg-blue-200/30 rounded transition-all duration-200"
+          style={{ 
+            top: `${viewport.topRatio * 100}%`, 
+            height: `${Math.max(2, viewport.heightRatio * 100)}%`,
+            zIndex: 20
+          }}
+          title="Current view"
         />
+        
+        {/* Markers count indicator */}
+        {markers.length > 0 && (
+          <div className="absolute bottom-1 right-1 bg-gray-700 text-white text-xs px-2 py-1 rounded">
+            {markers.length} changes
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
 export default MiniMap;
-
-
-

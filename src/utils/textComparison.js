@@ -1,4 +1,4 @@
-import { diffChars, diffWordsWithSpace, diffArrays } from "diff";
+import { diffChars, diffWordsWithSpace, diffArrays, diffSentences } from "diff";
 
 export const compareDocuments = (leftText, rightText) => {
   const diffs = diffChars(leftText, rightText);
@@ -49,6 +49,7 @@ export const compareHtmlDocuments = (leftHtml, rightHtml) => {
       };
     }
 
+    // Apply structural comparisons first
     const { leftDomWithImages, rightDomWithImages, structSummary } =
       applyImageDiffOutlines(leftHtml, rightHtml);
     const leftWithTable = applyTableCellDiffs(
@@ -66,8 +67,9 @@ export const compareHtmlDocuments = (leftHtml, rightHtml) => {
     summary.additions += structSummary.additions;
     summary.deletions += structSummary.deletions;
 
+    // Apply improved text comparison
     const { leftFinal, rightFinal, textSummary } =
-      applyTrueLineByLineComparison(leftWithTable, rightWithTable);
+      applyImprovedTextComparison(leftWithTable, rightWithTable);
 
     summary.additions += textSummary.additions;
     summary.deletions += textSummary.deletions;
@@ -103,6 +105,270 @@ const BLOCK_TAGS = new Set([
   "pre",
   "div",
 ]);
+
+// Improved text comparison with better sensitivity
+const applyImprovedTextComparison = (leftHtml, rightHtml) => {
+  const leftDiv = htmlToDiv(leftHtml);
+  const rightDiv = htmlToDiv(rightHtml);
+
+  // Extract all text blocks with better granularity
+  const leftBlocks = extractTextBlocks(leftDiv);
+  const rightBlocks = extractTextBlocks(rightDiv);
+
+  // Use sentence-level comparison for better detection
+  const leftSentences = leftBlocks.map(block => ({
+    ...block,
+    sentences: extractSentences(block.text)
+  }));
+  const rightSentences = rightBlocks.map(block => ({
+    ...block,
+    sentences: extractSentences(block.text)
+  }));
+
+  // Flatten for comparison
+  const leftFlat = leftSentences.flatMap(block => 
+    block.sentences.map(sentence => ({ ...block, text: sentence, originalBlock: block }))
+  );
+  const rightFlat = rightSentences.flatMap(block => 
+    block.sentences.map(sentence => ({ ...block, text: sentence, originalBlock: block }))
+  );
+
+  const leftTexts = leftFlat.map(item => item.text.trim());
+  const rightTexts = rightFlat.map(item => item.text.trim());
+
+  // Use more sensitive comparison
+  const diffs = diffArrays(leftTexts, rightTexts, {
+    comparator: (a, b) => {
+      // Normalize whitespace for comparison
+      const normalizeText = (text) => text.replace(/\s+/g, ' ').trim().toLowerCase();
+      return normalizeText(a) === normalizeText(b);
+    }
+  });
+
+  let summary = { additions: 0, deletions: 0 };
+  let leftIndex = 0;
+  let rightIndex = 0;
+
+  // Apply highlighting based on sentence-level differences
+  const processedLeftElements = new Set();
+  const processedRightElements = new Set();
+
+  diffs.forEach(diff => {
+    if (diff.added) {
+      // Mark added content in right document
+      for (let i = 0; i < diff.count; i++) {
+        const item = rightFlat[rightIndex + i];
+        if (item && item.element && !processedRightElements.has(item.element)) {
+          processedRightElements.add(item.element);
+          item.element.classList.add("git-line-added");
+          if (item.text.trim()) {
+            summary.additions++;
+            applyInlineHighlighting(item.element, "", item.text, "right");
+          }
+        }
+      }
+      rightIndex += diff.count;
+    } else if (diff.removed) {
+      // Mark removed content in left document
+      for (let i = 0; i < diff.count; i++) {
+        const item = leftFlat[leftIndex + i];
+        if (item && item.element && !processedLeftElements.has(item.element)) {
+          processedLeftElements.add(item.element);
+          item.element.classList.add("git-line-removed");
+          if (item.text.trim()) {
+            summary.deletions++;
+            applyInlineHighlighting(item.element, item.text, "", "left");
+          }
+        }
+      }
+      leftIndex += diff.count;
+    } else {
+      // Check for modifications within unchanged blocks
+      for (let i = 0; i < diff.count; i++) {
+        const leftItem = leftFlat[leftIndex + i];
+        const rightItem = rightFlat[rightIndex + i];
+        
+        if (leftItem && rightItem && leftItem.element && rightItem.element) {
+          const leftText = leftItem.text.trim();
+          const rightText = rightItem.text.trim();
+          
+          // More sensitive text comparison
+          if (leftText && rightText && !areTextsEquivalent(leftText, rightText)) {
+            if (!processedLeftElements.has(leftItem.element)) {
+              processedLeftElements.add(leftItem.element);
+              leftItem.element.classList.add("git-line-modified");
+              applyInlineHighlighting(leftItem.element, leftText, rightText, "left");
+              summary.deletions++;
+            }
+            if (!processedRightElements.has(rightItem.element)) {
+              processedRightElements.add(rightItem.element);
+              rightItem.element.classList.add("git-line-modified");
+              applyInlineHighlighting(rightItem.element, rightText, leftText, "right");
+              summary.additions++;
+            }
+          }
+        }
+      }
+      leftIndex += diff.count;
+      rightIndex += diff.count;
+    }
+  });
+
+  return {
+    leftFinal: leftDiv.innerHTML,
+    rightFinal: rightDiv.innerHTML,
+    textSummary: summary
+  };
+};
+
+// Extract text blocks with better granularity
+const extractTextBlocks = (container) => {
+  const blocks = [];
+  const walker = document.createTreeWalker(
+    container,
+    NodeFilter.SHOW_ELEMENT,
+    {
+      acceptNode: (node) => {
+        const tagName = node.tagName.toLowerCase();
+        return BLOCK_TAGS.has(tagName) && !isInsideTable(node)
+          ? NodeFilter.FILTER_ACCEPT
+          : NodeFilter.FILTER_SKIP;
+      }
+    }
+  );
+
+  let node;
+  while ((node = walker.nextNode())) {
+    const text = (node.textContent || "").trim();
+    if (text) {
+      blocks.push({
+        element: node,
+        text: text,
+        tagName: node.tagName.toLowerCase()
+      });
+    }
+  }
+
+  return blocks;
+};
+
+// Extract sentences for more granular comparison
+const extractSentences = (text) => {
+  if (!text || !text.trim()) return [""];
+  
+  // Split by sentence boundaries but preserve structure
+  const sentences = text.split(/(?<=[.!?])\s+/)
+    .filter(sentence => sentence.trim().length > 0);
+  
+  return sentences.length > 0 ? sentences : [text];
+};
+
+// More sophisticated text equivalence check
+const areTextsEquivalent = (text1, text2) => {
+  // Normalize whitespace and punctuation
+  const normalize = (text) => {
+    return text
+      .replace(/\s+/g, ' ')
+      .replace(/[""'']/g, '"')
+      .replace(/[–—]/g, '-')
+      .trim()
+      .toLowerCase();
+  };
+  
+  const norm1 = normalize(text1);
+  const norm2 = normalize(text2);
+  
+  // Check exact match first
+  if (norm1 === norm2) return true;
+  
+  // Check similarity threshold for minor differences
+  const similarity = calculateSimilarity(norm1, norm2);
+  return similarity > 0.95; // 95% similarity threshold
+};
+
+// Calculate text similarity using Levenshtein distance
+const calculateSimilarity = (str1, str2) => {
+  const len1 = str1.length;
+  const len2 = str2.length;
+  
+  if (len1 === 0) return len2 === 0 ? 1 : 0;
+  if (len2 === 0) return 0;
+  
+  const matrix = Array(len2 + 1).fill().map(() => Array(len1 + 1).fill(0));
+  
+  for (let i = 0; i <= len1; i++) matrix[0][i] = i;
+  for (let j = 0; j <= len2; j++) matrix[j][0] = j;
+  
+  for (let j = 1; j <= len2; j++) {
+    for (let i = 1; i <= len1; i++) {
+      const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
+      matrix[j][i] = Math.min(
+        matrix[j - 1][i] + 1,     // deletion
+        matrix[j][i - 1] + 1,     // insertion
+        matrix[j - 1][i - 1] + cost // substitution
+      );
+    }
+  }
+  
+  const maxLen = Math.max(len1, len2);
+  return (maxLen - matrix[len2][len1]) / maxLen;
+};
+
+// Improved inline highlighting
+const applyInlineHighlighting = (element, ownText, otherText, side) => {
+  if (!ownText.trim() && !otherText.trim()) return;
+  
+  // Store original content structure
+  const originalHTML = element.innerHTML;
+  
+  // Use word-level diff for better granularity
+  const diffs = diffWordsWithSpace(ownText || "", otherText || "");
+  
+  // Check if there are meaningful differences
+  const hasSignificantChanges = diffs.some(diff => {
+    if (diff.added || diff.removed) {
+      const content = (diff.value || "").trim();
+      return content.length > 0 && !/^\s*$/.test(content);
+    }
+    return false;
+  });
+  
+  if (!hasSignificantChanges) {
+    return; // No significant changes, keep original
+  }
+  
+  // Clear element and rebuild with highlighting
+  element.innerHTML = "";
+  let hasContent = false;
+  
+  diffs.forEach((diff) => {
+    const span = document.createElement("span");
+    const content = diff.value || "";
+    
+    if (diff.added && side === "right") {
+      span.className = "git-inline-added";
+      span.textContent = content;
+      hasContent = true;
+    } else if (diff.removed && side === "left") {
+      span.className = "git-inline-removed";
+      span.textContent = content;
+      hasContent = true;
+    } else if (!diff.added && !diff.removed) {
+      span.textContent = content;
+      if (content.trim()) hasContent = true;
+    } else {
+      // Don't show additions on left side or removals on right side
+      return;
+    }
+    
+    element.appendChild(span);
+  });
+  
+  // If no content was added, restore original
+  if (!hasContent) {
+    element.innerHTML = originalHTML;
+  }
+};
 
 const collectLinesWithStructure = (root) => {
   const lines = [];
@@ -173,9 +439,12 @@ const createTrueLineAlignment = (leftLines, rightLines) => {
   const leftTexts = leftLines.map((l) => l.text || "");
   const rightTexts = rightLines.map((l) => l.text || "");
 
-  // Only compare non-empty lines for meaningful differences
+  // Use more sensitive comparison with normalization
   const parts = diffArrays(leftTexts, rightTexts, {
-    comparator: (a, b) => a.trim() === b.trim(),
+    comparator: (a, b) => {
+      const normalize = (text) => text.replace(/\s+/g, ' ').trim();
+      return normalize(a) === normalize(b);
+    },
   });
 
   const leftResult = [];
@@ -238,19 +507,17 @@ const createTrueLineAlignment = (leftLines, rightLines) => {
         const addedCount = next.count || next.value.length;
         const pairCount = Math.min(removedCount, addedCount);
 
-        // Handle paired modifications
+        // Handle paired modifications with better sensitivity
         for (let k = 0; k < pairCount; k++) {
           const leftLine = leftLines[iLeft + k] || null;
           const rightLine = rightLines[iRight + k] || null;
 
-          if (
-            leftLine &&
-            rightLine &&
-            leftLine.text.trim() &&
-            rightLine.text.trim()
-          ) {
-            // Only mark as modified if there's actual content difference
-            if (leftLine.text.trim() !== rightLine.text.trim()) {
+          if (leftLine && rightLine) {
+            const leftText = leftLine.text.trim();
+            const rightText = rightLine.text.trim();
+            
+            // Use improved text comparison
+            if (leftText && rightText && !areTextsEquivalent(leftText, rightText)) {
               summary.deletions++;
               summary.additions++;
               leftResult.push({
@@ -486,7 +753,7 @@ const applyLineByLineDiffToDOM = (container, diffResult, side) => {
       const otherText = diffLine.otherContent || "";
 
       // Only apply modification highlighting if content actually differs
-      if (ownText.trim() !== otherText.trim()) {
+      if (!areTextsEquivalent(ownText.trim(), otherText.trim())) {
         element.classList.add("git-line-modified");
         applyInlineWordDiff(element, ownText, otherText, side);
       }
@@ -546,8 +813,8 @@ const applyInlineWordDiff = (element, ownText, otherText, side) => {
     return; // Both empty, no diff needed
   }
 
-  if (ownText.trim() === otherText.trim()) {
-    return; // Same content, no diff needed
+  if (areTextsEquivalent(ownText.trim(), otherText.trim())) {
+    return; // Equivalent content, no diff needed
   }
 
   const diffs = diffWordsWithSpace(ownText || "", otherText || "");
@@ -681,7 +948,7 @@ const applyTableCellDiffs = (ownHtml, otherHtml, side) => {
           continue;
         }
 
-        if (xc && ownText && otherText && ownText !== otherText) {
+        if (xc && ownText && otherText && !areTextsEquivalent(ownText, otherText)) {
           oc.classList.add("git-cell-modified");
           applyInlineWordDiff(oc, ownText, otherText, side);
         }
@@ -844,7 +1111,7 @@ export const generateDetailedReport = (leftHtml, rightHtml) => {
   const leftTexts = leftLines.map((l) => l.text || "");
   const rightTexts = rightLines.map((l) => l.text || "");
   const parts = diffArrays(leftTexts, rightTexts, {
-    comparator: (a, b) => a === b,
+    comparator: (a, b) => areTextsEquivalent(a, b),
   });
 
   const lines = [];
@@ -891,7 +1158,7 @@ export const generateDetailedReport = (leftHtml, rightHtml) => {
       const r = rightLines[iR++];
       if (!l || !r) continue;
 
-      const textEqual = (l.text || "").trim() === (r.text || "").trim();
+      const textEqual = areTextsEquivalent(l.text || "", r.text || "");
       const fmtChanges = compareFormat(l.fmt, r.fmt);
 
       if (textEqual && fmtChanges.length > 0) {
@@ -979,7 +1246,7 @@ export const generateDetailedReport = (leftHtml, rightHtml) => {
         }
         const a = (cellL.textContent || "").trim();
         const b = (cellR.textContent || "").trim();
-        if (a && b && a !== b) {
+        if (a && b && !areTextsEquivalent(a, b)) {
           tableReport.push({
             table: ti + 1,
             row: ri + 1,
