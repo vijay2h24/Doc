@@ -48,22 +48,68 @@
 }
 
 /* Minimal diff highlighting styles - preserve original formatting completely */
-.word-document-preview .diff-insert { background-color: #d4edda; color: #155724; text-decoration: none; font-weight: inherit; font-family: inherit; font-size: inherit; line-height: inherit; white-space: pre-wrap; }
-.word-document-preview .diff-delete { background-color: #f8d7da; color: #721c24; text-decoration: line-through; font-weight: inherit; font-family: inherit; font-size: inherit; line-height: inherit; white-space: pre-wrap; }
+.word-document-preview .diff-insert {
+  background-color: #d4edda;
+  color: #155724;
+  text-decoration: none;
+  font-weight: inherit;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  white-space: pre-wrap;
+}
+
+.word-document-preview .diff-delete {
+  background-color: #f8d7da;
+  color: #721c24;
+  text-decoration: line-through;
+  font-weight: inherit;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  white-space: pre-wrap;
+}
 
 /* Ensure diff highlighting doesn't affect layout */
 .word-document-preview .diff-insert,
-.word-document-preview .diff-delete { box-sizing: border-box; vertical-align: baseline; white-space: inherit; word-spacing: inherit; letter-spacing: inherit; }
+.word-document-preview .diff-delete {
+  box-sizing: border-box;
+  vertical-align: baseline;
+  white-space: inherit;
+  word-spacing: inherit;
+  letter-spacing: inherit;
+}
 
 /* Git-like diff highlighting - green for additions, red for deletions only */
-.word-document-preview .git-line-added { background-color: #d4edda; border-left: 4px solid #28a745; padding: 8px 12px; margin: 4px 0; border-radius: 4px; }
-.word-document-preview .git-line-removed { background-color: #f8d7da; border-left: 4px solid #dc3545; padding: 8px 12px; margin: 4px 0; border-radius: 4px; }
-.word-document-preview .git-line-modified { background-color: #fff7e0; border-left: 4px solid #ffc107; padding: 8px 12px; margin: 4px 0; border-radius: 4px; }
-.word-document-preview .git-line-placeholder { 
-  background: transparent; 
-  border-left: 4px solid transparent; 
-  margin: 4px 0; 
-  border-radius: 4px; 
+.word-document-preview .git-line-added {
+  background-color: #d4edda;
+  border-left: 4px solid #28a745;
+  padding: 8px 12px;
+  margin: 4px 0;
+  border-radius: 4px;
+}
+
+.word-document-preview .git-line-removed {
+  background-color: #f8d7da;
+  border-left: 4px solid #dc3545;
+  padding: 8px 12px;
+  margin: 4px 0;
+  border-radius: 4px;
+}
+
+.word-document-preview .git-line-modified {
+  background-color: #fff7e0;
+  border-left: 4px solid #ffc107;
+  padding: 8px 12px;
+  margin: 4px 0;
+  border-radius: 4px;
+}
+
+.word-document-preview .git-line-placeholder {
+  background: transparent;
+  border-left: 4px solid transparent;
+  margin: 4px 0;
+  border-radius: 4px;
   min-height: 20px;
   display: block;
   /* Maintain original document formatting while showing as empty space */
@@ -75,20 +121,51 @@
 }
 
 /* Inline highlighting for changes within lines - green and red only */
-.word-document-preview .git-inline-added { background-color: #d4edda; color: #155724; padding: 2px 4px; border-radius: 3px; font-weight: 500; white-space: pre-wrap; }
-.word-document-preview .git-inline-removed { background-color: #f8d7da; color: #721c24; padding: 2px 4px; border-radius: 3px; font-weight: 500; white-space: pre-wrap; }
+.word-document-preview .git-inline-added {
+  background-color: #d4edda;
+  color: #155724;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-weight: 500;
+  white-space: pre-wrap;
+}
+
+.word-document-preview .git-inline-removed {
+  background-color: #f8d7da;
+  color: #721c24;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-weight: 500;
+  white-space: pre-wrap;
+}
 
 /* Table cell Git-like highlighting */
-.word-document-preview .git-cell-added { background-color: #e7f7eb; border: 2px solid #28a745; }
-.word-document-preview .git-cell-removed { background-color: #fde7ea; border: 2px solid #dc3545; }
-.word-document-preview .git-cell-modified { background-color: #fff7e0; border: 2px solid #ffc107; }
+.word-document-preview .git-cell-added {
+  background-color: #e7f7eb;
+  border: 2px solid #28a745;
+}
+
+.word-document-preview .git-cell-removed {
+  background-color: #fde7ea;
+  border: 2px solid #dc3545;
+}
+
+.word-document-preview .git-cell-modified {
+  background-color: #fff7e0;
+  border: 2px solid #ffc107;
+}
 
 /* Preserve original formatting while highlighting */
 .word-document-preview .git-line-added,
-.word-document-preview .git-line-removed { font-family: inherit; font-size: inherit; line-height: inherit; white-space: pre-wrap; }
+.word-document-preview .git-line-removed {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  white-space: pre-wrap;
+}
 
 /* Only highlight actual changes - preserve original formatting for unchanged content */
-.word-document-preview .git-line-unchanged { 
+.word-document-preview .git-line-unchanged {
   /* No highlighting for unchanged lines - preserve original formatting completely */
   background: transparent;
   border: none;
@@ -202,10 +279,36 @@
 /* Do not alter image sizing or borders; rely on DOCX-rendered styles */
 
 /* Git-style left gutter with markers and line numbers */
-.word-document-preview .with-gutter { position: relative; padding-left: 48px; }
-.word-document-preview .git-gutter { position: absolute; left: 8px; top: 0; bottom: 0; width: 40px; display: inline-flex; align-items: center; gap: 6px; color: #6b7280; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; }
-.word-document-preview .git-gutter::before { content: attr(data-marker); font-weight: 700; width: 10px; text-align: center; }
-.word-document-preview .git-gutter::after { content: attr(data-line); color: #9ca3af; }
+.word-document-preview .with-gutter {
+  position: relative;
+  padding-left: 48px;
+}
+
+.word-document-preview .git-gutter {
+  position: absolute;
+  left: 8px;
+  top: 0;
+  bottom: 0;
+  width: 40px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #6b7280;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+}
+
+.word-document-preview .git-gutter::before {
+  content: attr(data-marker);
+  font-weight: 700;
+  width: 10px;
+  text-align: center;
+}
+
+.word-document-preview .git-gutter::after {
+  content: attr(data-line);
+  color: #9ca3af;
+}
 
 /* Responsive design */
 @media (max-width: 768px) {
@@ -213,21 +316,67 @@
     font-size: 14px;
     line-height: 1.5;
   }
-  
+
   .word-document-preview h1 {
     font-size: 1.8em;
   }
-  
+
   .word-document-preview h2 {
     font-size: 1.4em;
   }
-  
+
   .word-document-preview table.word-table {
     font-size: 12px;
   }
-  
+
   .word-document-preview table.word-table th,
   .word-document-preview table.word-table td {
     padding: 6px 8px;
   }
+}
+
+/* Table-level highlighting */
+.word-document-preview .git-table-added {
+  outline: 3px solid #28a745;
+  outline-offset: 2px;
+  background-color: #f8fff9;
+}
+
+.word-document-preview .git-table-removed {
+  outline: 3px solid #dc3545;
+  outline-offset: 2px;
+  background-color: #fff8f8;
+}
+
+/* Row-level highlighting */
+.word-document-preview .git-row-added {
+  background-color: #e7f7eb;
+  border-left: 4px solid #28a745;
+}
+
+.word-document-preview .git-row-removed {
+  background-color: #fde7ea;
+  border-left: 4px solid #dc3545;
+}
+
+/* Image highlighting */
+.word-document-preview .git-image-added {
+  outline: 3px solid #28a745;
+  outline-offset: 3px;
+  background-color: #f8fff9;
+  border-radius: 4px;
+}
+
+.word-document-preview .git-image-removed {
+  outline: 3px solid #dc3545;
+  outline-offset: 3px;
+  background-color: #fff8f8;
+  border-radius: 4px;
+}
+
+.word-document-preview .git-image-modified {
+  outline: 3px solid #ffc107;
+  outline-offset: 3px;
+  background-color: #fffbf0;
+  border-radius: 4px;
 }

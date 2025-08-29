@@ -6,7 +6,11 @@ import MiniMap from "./components/MiniMap";
 import ComparisonSummary from "./components/ComparisonSummary";
 import DetailedReport from "./components/DetailedReport";
 import { compareDocuments, compareHtmlDocuments } from "./utils/textComparison";
-import { exportComparisonResults, exportAsHtml, exportAsPdf } from "./utils/exportUtils";
+import {
+  exportComparisonResults,
+  exportAsHtml,
+  exportAsPdf,
+} from "./utils/exportUtils";
 
 function App() {
   const [leftDocument, setLeftDocument] = useState(null);
@@ -15,25 +19,22 @@ function App() {
   const [viewMode, setViewMode] = useState("preview");
   const [showDetailed, setShowDetailed] = useState(false);
 
-  const handleDocumentUpload = useCallback(
-    (document, position) => {
-      if (position === "left") {
-        setLeftDocument(document);
-      } else {
-        setRightDocument(document);
-      }
-      // Reset comparison when new document is uploaded
-      setComparison(null);
-      setViewMode("preview");
-    },
-    []
-  );
+  const handleDocumentUpload = useCallback((document, position) => {
+    if (position === "left") {
+      setLeftDocument(document);
+    } else {
+      setRightDocument(document);
+    }
+    // Reset comparison when new document is uploaded
+    setComparison(null);
+    setViewMode("preview");
+  }, []);
 
   const handleCompareDocuments = useCallback(() => {
     console.log("Compare button clicked!");
     console.log("Left document:", leftDocument);
     console.log("Right document:", rightDocument);
-    
+
     if (leftDocument && rightDocument) {
       console.log("Both documents exist, starting comparison...");
       // Always use original, unmodified HTML content for comparison
@@ -123,10 +124,12 @@ function App() {
                   <button
                     onClick={() => setShowDetailed((v) => !v)}
                     className={`px-4 py-2 rounded-md font-medium transition-all duration-200 ${
-                      showDetailed ? "bg-white text-blue-600 shadow-sm" : "text-gray-600 hover:text-gray-800"
+                      showDetailed
+                        ? "bg-white text-blue-600 shadow-sm"
+                        : "text-gray-600 hover:text-gray-800"
                     }`}
                   >
-                    {showDetailed ? 'Hide details' : 'Show details'}
+                    {showDetailed ? "Hide details" : "Show details"}
                   </button>
                 )}
               </div>
@@ -165,7 +168,10 @@ function App() {
                 title="Original Document"
                 containerId="left-preview-container"
               />
-              <MiniMap leftContainerId="left-preview-container" rightContainerId="right-preview-container" />
+              <MiniMap
+                leftContainerId="left-preview-container"
+                rightContainerId="right-preview-container"
+              />
               <DocumentPreview
                 document={rightDocument}
                 diffs={comparison.rightDiffs}
@@ -174,31 +180,70 @@ function App() {
               />
             </div>
 
-            {showDetailed && (
-              <DetailedReport report={comparison.detailed} />
-            )}
+            {showDetailed && <DetailedReport report={comparison.detailed} />}
 
             {/* Legend */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
               <h4 className="text-sm font-semibold text-gray-700 mb-3">
                 Legend
               </h4>
-              <div className="flex flex-wrap gap-4 text-sm">
-                <div className="flex items-center gap-2">
-                  <span className="bg-green-200 text-green-800 px-2 py-1 rounded">
-                    Added text
-                  </span>
-                  <span className="text-gray-600">
-                    Content added in the modified document
-                  </span>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <div className="space-y-3">
+                  <h5 className="font-medium text-gray-700">Text Changes</h5>
+                  <div className="flex items-center gap-2">
+                    <span className="bg-green-200 text-green-800 px-2 py-1 rounded">
+                      Added text
+                    </span>
+                    <span className="text-gray-600">
+                      Content added in the modified document
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="bg-red-200 text-red-800 px-2 py-1 rounded line-through">
+                      Deleted text
+                    </span>
+                    <span className="text-gray-600">
+                      Content removed from the original document
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="bg-yellow-200 text-yellow-800 px-2 py-1 rounded">
+                      Modified text
+                    </span>
+                    <span className="text-gray-600">
+                      Content that was changed between documents
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="bg-red-200 text-red-800 px-2 py-1 rounded line-through">
-                    Deleted text
-                  </span>
-                  <span className="text-gray-600">
-                    Content removed from the original document
-                  </span>
+
+                <div className="space-y-3">
+                  <h5 className="font-medium text-gray-700">
+                    Structural Changes
+                  </h5>
+                  <div className="flex items-center gap-2">
+                    <span className="bg-green-200 text-green-800 px-2 py-1 rounded border-l-4 border-green-500">
+                      Table/Image Added
+                    </span>
+                    <span className="text-gray-600">
+                      New tables, charts, or images
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="bg-red-200 text-red-800 px-2 py-1 rounded border-l-4 border-red-500">
+                      Table/Image Removed
+                    </span>
+                    <span className="text-gray-600">
+                      Tables, charts, or images that were deleted
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="bg-yellow-200 text-yellow-800 px-2 py-1 rounded border-l-4 border-yellow-500">
+                      Table/Image Modified
+                    </span>
+                    <span className="text-gray-600">
+                      Tables, charts, or images that were changed
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -306,4 +351,4 @@ function App() {
   );
 }
 
-export default App; 
+export default App;
