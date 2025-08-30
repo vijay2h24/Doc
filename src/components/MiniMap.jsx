@@ -325,7 +325,6 @@ const MiniMap = ({ leftContainerId, rightContainerId }) => {
       {/* Header */}
       <div className="bg-gradient-to-r from-slate-50 to-gray-50 px-4 py-3 border-b border-gray-200">
         <div className="flex items-center justify-between">
-          <h4 className="text-sm font-semibold text-gray-800">Navigation</h4>
           <div className="flex items-center gap-1">
             <button
               onClick={navigateToPrevious}
